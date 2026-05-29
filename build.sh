@@ -97,9 +97,10 @@ compile_16asm "boot/bootloader.asm"
 compile_16asm "boot/stage2.asm"
 compile_asm "boot/kernel-entry.asm"
 
+compile_c "kernel/display.c"
 compile_c "kernel/main.c"
 
-link_kernel "main.o"
+link_kernel "main.o" "display.o"
 
 create_floppy
 
