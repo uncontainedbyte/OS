@@ -145,27 +145,74 @@ static inline void utos(uint32 num,char* buf){
 	}
 	buf[s] = 0;
 }
-static inline void utox(uint32 num,char* buf){
-	int8 i=0;
+static inline void utox(uint32 num, char* buf, int8 bytes) {
+	int8 i = 0;
 	char tmp[20];
-	while(num>0){
-		tmp[i]=(num%16)+'0';
-		if(tmp[i]>'9'){
-			tmp[i]+=7;
+	
+	switch(bytes){
+		case 1: num &= 0xFF;     break;
+		case 2: num &= 0xFFFF;   break;
+		case 3: num &= 0xFFFFFF; break;
+		default:                 break; // 0 or 4 uses all 32 bits
+	}
+	
+	do{
+		tmp[i] = (num % 16) + '0';
+		if(tmp[i] > '9'){
+			tmp[i] += 7;
 		}
 		num /= 16;
 		i++;
+	}while(num > 0);
+	
+	int8 target_len = (bytes > 0) ? (bytes * 2) : i;
+	
+	while(i < target_len){
+		tmp[i] = '0';
+		i++;
 	}
-	int8 s=(i%2)?1:0,pad=0;
-	if(i%2) pad=1;
-	while(i>0){
-		buf[s] = tmp[i-1];
-		i--;s++;
+	
+	int8 s = 0;
+	while(i > 0){
+		buf[s] = tmp[i - 1];
+		i--; 
+		s++;
 	}
 	buf[s] = 0;
-	if(pad) buf[0] = '0';
 }
-static inline void utob(uint32 num,char* buf){
+static inline void utob(uint32 num, char* buf, int8 bytes) {
+	switch(bytes){
+		case 1: num &= 0xFF;     break;
+		case 2: num &= 0xFFFF;   break;
+		case 3: num &= 0xFFFFFF; break;
+		default:                 break; // 0 or 4 uses all 32 bits
+	}
+	
+	int8 i = 0;
+	char tmp[33];
+	
+	do{
+		tmp[i] = (num % 2) + '0';
+		num /= 2;
+		i++;
+	}while (num > 0);
+	
+	int8 target_len = (bytes > 0) ? (bytes * 8) : i;
+	
+	while(i < target_len){
+		tmp[i] = '0';
+		i++;
+	}
+	
+	int8 s = 0;
+	while(i > 0){
+		buf[s] = tmp[i - 1];
+		i--; 
+		s++;
+	}
+	buf[s] = 0;
+}
+static inline void utobo(uint32 num,char* buf){
 	int8 i=0;
 	char tmp[33];
 	for(int s=0;s<32;s++){buf[s]='0';};

@@ -19,13 +19,8 @@ void clear();
 void set_cursor(int offset);
 int get_cursor();
 
-
 void setChar(char c, int offset, int color);
 void shiftUp();
-
-void printChar(char ch,int color);
-void printStr(char* str,int color);
-
 void printf(const char* _format,...);
 
 

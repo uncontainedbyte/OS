@@ -96,11 +96,13 @@ create_floppy() {
 compile_16asm "boot/bootloader.asm"
 compile_16asm "boot/stage2.asm"
 compile_asm "boot/kernel-entry.asm"
+compile_asm "kernel/isr.asm"
 
+compile_c "kernel/interrupts.c"
 compile_c "kernel/display.c"
 compile_c "kernel/main.c"
 
-link_kernel "main.o" "display.o"
+link_kernel "main.o" "display.o" "isr.o" "interrupts.o"
 
 create_floppy
 

@@ -118,20 +118,30 @@ void printf(const char* _format,...){
 				}break;
 				case 'x':{
 					uint32 num = va_arg(args,uint32);
+					int8 bytes=0;
+					if(_format[index+1]>='0'&&'9'>=_format[index+1]){
+						index++;
+						bytes = _format[index]-'0';
+					}
 					char buf[10];
-					utox(num,buf);
+					utox(num,buf,bytes);
 					printStr(buf,color);
 				}break;
 				case 'b':{
 					uint32 num = va_arg(args,uint32);
+					int8 bytes=0;
+					if(_format[index+1]>='0'&&'9'>=_format[index+1]){
+						index++;
+						bytes = _format[index]-'0';
+					}
 					char buf[33];
-					utob(num,buf);
+					utob(num,buf,bytes);
 					printStr(buf,color);
 				}break;
 				case 'p':{
 					uint32 num = va_arg(args,uint32);
 					char buf[10];
-					utox(num,buf);
+					utox(num,buf,4);
 					printChar('0',color);
 					printChar('x',color);
 					printStr(buf,color);
