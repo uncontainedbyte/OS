@@ -1,5 +1,7 @@
 #include "display.h"
 #include "interrupts.h"
+#include "keyboard.h"
+#include "PIT.h"
 
 extern char kernel_start;
 extern char kernel_end;
@@ -40,14 +42,15 @@ void kmain(){
 	
 	install_Basic_Interrupts();
 	
+	keyboard_init();
 	
+	PIT_init();
 	
-	
-	
-	
-	
-	
-	
+	while(1){
+		uint32 c = keyboard_read();
+		if(KEY_ASCII(c)=='-'){ disable_interrupts(); sleep(100); }
+		if(KEY_ASCII(c)) printf("%c",c);
+	}
 	while(1);
 }
 

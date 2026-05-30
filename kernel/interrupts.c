@@ -569,11 +569,11 @@ void install_extra_isr(){
 	set_idt_gate(254, (uint32)isr254,systemFlags);
 	set_idt_gate(255, (uint32)isr255,systemFlags);
 }
-void pic_mask_all(void) {
+void pic_mask_all(void){
 	outb(0x21, 0xFF); // master
 	outb(0xA1, 0xFF); // slave
 }
-void pic_unmask_irq(uint8 irq) {
+void pic_unmask_irq(uint8 irq){
 	uint16 port = (irq < 8) ? 0x21 : 0xA1;
 	uint8  mask = inb(port) & ~(1 << (irq % 8));
 	outb(port, mask);
@@ -583,6 +583,11 @@ void disable_interrupts(){
 }
 void enable_interrupts(){
 	asm volatile("sti");
+}
+uint8 interrupts_enabled(){
+	uint32 eflags;
+	asm volatile("pushf\npop %0": "=r"(eflags));
+	return (eflags & (1 << 9)) != 0;
 }
 void idt_init(){
 	disable_interrupts();

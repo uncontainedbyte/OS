@@ -67,8 +67,10 @@ void printChar(char ch,int color){
 		offset += MAX_COLS * 2;
 		offset -= offset%(2*MAX_COLS);
 	}else if(ch == '\b'){
-		offset -= 2;
-		setChar(' ', offset,color);
+		if(offset>=2){
+			offset -= 2;
+			setChar(' ', offset,color);
+		}
 	}else{
 		setChar(ch, offset,color);
 		offset += 2;

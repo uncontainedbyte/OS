@@ -98,70 +98,12 @@ compile_16asm "boot/stage2.asm"
 compile_asm "boot/kernel-entry.asm"
 compile_asm "kernel/isr.asm"
 
+compile_c "kernel/PIT.c"
+compile_c "kernel/keyboard.c"
 compile_c "kernel/interrupts.c"
 compile_c "kernel/display.c"
 compile_c "kernel/main.c"
 
-link_kernel "main.o" "display.o" "isr.o" "interrupts.o"
+link_kernel "main.o" "display.o" "isr.o" "interrupts.o" "keyboard.o" "PIT.o"
 
 create_floppy
-
-
-
-
-
-
-
-
-
-
-#link_kernel(){
-	#echo "Linking kernel files into kernel.bin"
-	#local object_files=()
-	#for obj_file in "$@"; do
-		## Prepend the 'binarys/' directory to each filename
-		#object_files+="binarys/$obj_file "
-	#done
-	#echo "${object_files[@]}"
-	#ld -m elf_i386 -o binarys/kernel.bin -T linker-script.lds binarys/kernel-entry.o ${object_files[@]} --oformat binary
-#}
-#create_floppy() {
-	#echo "Creating floppy.img"
-	##dd if=/dev/zero of=blank.bin bs=1024 count=1440
-	#cat binarys/bootloader.bin binarys/stage2.bin binarys/kernel.bin bees/*.bee blank.bin> floppy.img
-	#cat binarys/bootloader.bin binarys/stage2.bin binarys/kernel.bin bees/*.bee> OS.img
-#}
-
-
-##compile_c "lib/memory_API.c"
-##compile_c "kernel/arch/interrupt.c"
-##compile_c "kernel/drivers/ports.c"
-##compile_c "lib/util.c"
-##compile_c "kernel/drivers/display.c"
-##compile_asm32 "kernel/arch/asm_interrupt.asm"
-##compile_c "kernel/drivers/keyboard.c"
-##compile_c "lib/keyboard_API.c"
-
-
-
-
-#compile_bee_v2 "bees/display/"
-##compile_bee_v2 "bees/interrupt/"
-##compile_bee_v2 "bees/keyboard/"
-##compile_bee_v2 "bees/PIT/"
-##compile_bee_v2 "bees/memory/"
-
-#compile_bee_v2 "bees/util/"
-#compile_bee_v2 "bees/start/"
-
-##compile_asm16 "queen/bootloader.asm"
-##compile_asm16 "queen/stage2.asm"
-##compile_asm32 "queen/kernel-entry.asm"
-
-#compile_c "queen/main.c"
-##compile_asm32 "queen/main.asm"
-
-#link_kernel "main.o" #"memory_API.o" "interrupt.o" "ports.o" "util.o" "display.o" "asm_interrupt.o" "keyboard.o" "keyboard_API.o"
-
-
-#create_floppy

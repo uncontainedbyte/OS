@@ -28,6 +28,8 @@ typedef enum{
 void idt_init();
 void enable_interrupts();
 void disable_interrupts();
+uint8 interrupts_enabled();
 void registerInterrupt(uint32 id,uint8 flags,uint32 handler);
+void pic_unmask_irq(uint8 irq);
 
 void install_Basic_Interrupts();
