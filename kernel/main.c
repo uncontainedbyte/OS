@@ -2,9 +2,9 @@
 #include "interrupts.h"
 #include "keyboard.h"
 #include "PIT.h"
+#include "memory.h"
 
-extern char kernel_start;
-extern char kernel_end;
+extern uint32 kernel_start;
 
 void ____testPrint(){
 	printf("Char:     %c\n",'c');
@@ -35,16 +35,22 @@ void ____testPrint(){
 
 
 void kmain(){
+	uint32 kernel_end = *((uint32*)0x7FA);
+	kernel_end += ((uint32)(*((uint16*)0x7F8)))*512;
+	
 	clear();
 	
 	idt_init();
 	enable_interrupts();
-	
 	install_Basic_Interrupts();
-	
 	keyboard_init();
-	
 	PIT_init();
+	MEM_init(kernel_end);
+	
+	printf("Kernel-Start: %x4\n",*((uint32*)0x7FA));
+	printf("Kernel-End:   %x4\n",kernel_end);
+	MEM_print_memory_map();
+	MEM_printPageBitmap();
 	
 	while(1){
 		uint32 c = keyboard_read();

@@ -116,11 +116,11 @@ static inline void itos(int32 num,char* buf){
 		unum=-num;
 	}else{ unum=num; }
 	char tmp[20];
-	while(unum>0){
+	do{
 		tmp[i]=(unum%10)+'0';
 		unum /= 10;
 		i++;
-	}
+	}while(unum>0);
 	int8 s=0;
 	if(neg) s=1;
 	while(i>0){
@@ -133,11 +133,11 @@ static inline void itos(int32 num,char* buf){
 static inline void utos(uint32 num,char* buf){
 	int8 i=0;
 	char tmp[20];
-	while(num>0){
+	do{
 		tmp[i]=(num%10)+'0';
 		num /= 10;
 		i++;
-	}
+	}while(num>0);
 	int8 s=0;
 	while(i>0){
 		buf[s] = tmp[i-1];

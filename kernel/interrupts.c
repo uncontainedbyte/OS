@@ -670,6 +670,13 @@ void handle_Breakpoint(registers_t *r){
 	printf("%#40! Breakpoint !");
 	asm volatile("hlt");
 }
+void handle_PageFault(registers_t *r){
+	printf("%#40! Page Fault !");
+	uint32 addr;
+	asm volatile("mov %%cr2, %0": "=r"(addr));
+	printf("\nAddress: %p",addr);
+	asm volatile("hlt");
+}
 
 
 void install_Basic_Interrupts(){
@@ -687,6 +694,7 @@ void install_Basic_Interrupts(){
 	
 	
 	registerInterrupt(13,systemFlags,(uint32)handle_GeneralProtectionFault);
+	registerInterrupt(14,systemFlags,(uint32)handle_PageFault);
 }
 
 

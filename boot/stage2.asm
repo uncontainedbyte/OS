@@ -14,6 +14,8 @@ _start:;{
 	call print_string
 	
 	call load_kernel
+	mov dword[0x7FA], KERNEL_LOAD_ADDRESS
+	mov word[0x7F8], KERNEL_SECTORS_TO_LOAD
 	
 	mov si,ld_switch_msg
 	call print_string
