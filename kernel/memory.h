@@ -5,6 +5,15 @@
 
 
 
-void MEM_print_memory_map();
 void MEM_init(uint32 kernel_end);
+
+uint32 alloc_pages(uint32 count);
+void free_pages(uint32 page, uint32 count);
+void map_page(uint32 virt,uint32 phys,uint32 flags);
+
+void* kalloc(uint32 count);
+void kfree(void* ptr);
+
+void MEM_print_memory_map();
 void MEM_printPageBitmap();
+void heap_dump();

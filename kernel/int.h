@@ -32,7 +32,7 @@ typedef char* va_list;
 
 
 
-static inline unsigned char inb(uint16 port){
+static inline uint8 inb(uint16 port){
 	unsigned char result;
 	asm("in %%dx, %%al" : "=a" (result) : "d" (port));
 	return result;
@@ -40,7 +40,7 @@ static inline unsigned char inb(uint16 port){
 static inline void outb(uint16 port, uint8 data){
 	asm("out %%al, %%dx" : : "a" (data), "d" (port));
 }
-static inline unsigned short inw(uint16 port){
+static inline uint16 inw(uint16 port){
 	unsigned short result;
 	asm("in %%dx, %%ax" : "=a" (result) : "d" (port));
 	return result;
@@ -48,7 +48,14 @@ static inline unsigned short inw(uint16 port){
 static inline void outw(uint16 port, uint16 data){
 	asm("out %%ax, %%dx" : : "a" (data), "d" (port));
 }
-
+static inline uint32 inl(uint16 port){
+	uint32 result;
+	asm("in %%dx, %%eax" : "=a" (result) : "d" (port));
+	return result;
+}
+static inline void outl(uint16 port, uint32 data){
+	asm("out %%eax, %%dx" : : "a" (data), "d" (port));
+}
 
 
 static inline int32 stoi(const char* string){
@@ -231,11 +238,29 @@ static inline void utobo(uint32 num,char* buf){
 
 static inline int string_length(char s[]) {
 	int i = 0;
-	while (s[i] != '\0') ++i;
+	while(s[i] != '\0') ++i;
 	return i;
 }
+static inline uint8 cmpstr(char s1[],char s2[]) {
+	int i = 0;
+	while(true){
+		if(s1[i]==s2[i]){
+			if(s1[i]==0) return 1;
+			i++;
+			continue;
+		}
+		
+		if(s1[i]==0) break;
+		if(s2[i]==0) break;
+	}
+	
+	return 0;
+}
 
-
+static inline void memset(void* ptr,uint8 value,uint32 size){
+	uint8* p = ptr;
+	while(size--) *p++ = value;
+}
 
 
 
