@@ -150,15 +150,12 @@ void kmain(){
 	int i=0;
 	
 	uint8* sector = kalloc(512);
-	if(sata_read(0x1,1,sector)){
+	if(sata_read(0x8,1,sector)){
 		printf("read ok\n");
 	}else{
 		printf("read fail\n");
 	}
 	printf("%s\n",sector);
-	
-	memset(sector,'A',512);
-	sata_write(0x1,1,sector);
 	
 	
 	

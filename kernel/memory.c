@@ -56,7 +56,7 @@ typedef struct heap_block {
 	uint8 free;
 	uint8 _pad;
 	struct heap_block* next;
-} heap_block_t;
+} __attribute__((packed)) heap_block_t;
 
 uint8 _heap_size = 16; // size in pages
 heap_block_t* heap;

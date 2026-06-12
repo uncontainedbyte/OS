@@ -98,6 +98,7 @@ compile_16asm "boot/stage2.asm"
 compile_asm "boot/kernel-entry.asm"
 compile_asm "kernel/isr.asm"
 
+compile_c "kernel/filesystem.c"
 compile_c "kernel/pci.c"
 compile_c "kernel/memory.c"
 compile_c "kernel/PIT.c"
@@ -106,6 +107,8 @@ compile_c "kernel/interrupts.c"
 compile_c "kernel/display.c"
 compile_c "kernel/main.c"
 
-link_kernel "main.o" "display.o" "isr.o" "interrupts.o" "keyboard.o" "PIT.o" "memory.o" "pci.o"
+link_kernel "main.o" "display.o" "isr.o" \
+			"interrupts.o" "keyboard.o" "PIT.o" \
+			"memory.o" "pci.o" "filesystem.o"
 
 create_floppy
