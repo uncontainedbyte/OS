@@ -236,6 +236,7 @@ int main(int argc, char* argv[]){
 	
 	std::cout<<"Generating Root Directory..."<<std::endl;
 	Directory_Table root;
+	index+=1;
 	
 	for(int s=0;s<40;s++){
 		root.header.reserved[s] = 0;
@@ -252,6 +253,8 @@ int main(int argc, char* argv[]){
 	
 	std::cout<<"Used Blocks: "<<index+1<<std::endl;
 	std::cout<<"Free Blocks: "<<blockCount - (index+1)<<std::endl;
+	
+	consume_to(bitmap,index);
 	
 	std::cout<<"Writing to Disk..."<<std::endl;
 	
