@@ -236,12 +236,12 @@ static inline void utobo(uint32 num,char* buf){
 	buf[s] = 0;
 }
 
-static inline int string_length(char s[]) {
+static inline int strlen(const char* str){
 	int i = 0;
-	while(s[i] != '\0') ++i;
+	while(str[i] != '\0') ++i;
 	return i;
 }
-static inline uint8 cmpstr(char s1[],char s2[]) {
+static inline uint8 cmpstr(char s1[],char s2[]){
 	int i = 0;
 	while(true){
 		if(s1[i]==s2[i]){
@@ -250,8 +250,7 @@ static inline uint8 cmpstr(char s1[],char s2[]) {
 			continue;
 		}
 		
-		if(s1[i]==0) break;
-		if(s2[i]==0) break;
+		break;
 	}
 	
 	return 0;
@@ -260,6 +259,11 @@ static inline uint8 cmpstr(char s1[],char s2[]) {
 static inline void memset(void* ptr,uint8 value,uint32 size){
 	uint8* p = ptr;
 	while(size--) *p++ = value;
+}
+static inline void memcpy(void* dest,void* src,uint32 size){
+	uint8* d = dest;
+	uint8* s = dest;
+	while(size--) *d = *s;
 }
 
 

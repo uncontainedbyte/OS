@@ -319,7 +319,7 @@ int ahci_identify(SATA_DRIVE* drive){
 	
 	drive->sector_count = sectors;
 	
-	printf("SATA sectors: %u\n", sectors);
+	//printf("SATA sectors: %u\n", sectors);
 	
 	return 1;
 }

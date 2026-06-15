@@ -4,6 +4,7 @@
 #include "PIT.h"
 #include "memory.h"
 #include "pci.h"
+#include "filesystem.h"
 
 extern uint32 kernel_start;
 
@@ -124,6 +125,11 @@ void execute(char* buf){
 	if(arg3[0]) printf("arg3: %s\n",arg3);
 	if(arg4[0]) printf("arg4: %s\n",arg4);
 	
+	if(cmpstr(cmd,"mkdir")){
+		FS_dir_create(arg0,arg1);
+	}else if(cmpstr(cmd,"rmdir")){
+		FS_dir_delete(arg0,arg1);
+	}
 }
 
 
@@ -149,13 +155,12 @@ void kmain(){
 	char cmd_buf[64];
 	int i=0;
 	
-	uint8* sector = kalloc(512);
-	if(sata_read(0x8,1,sector)){
-		printf("read ok\n");
-	}else{
-		printf("read fail\n");
-	}
-	printf("%s\n",sector);
+	FILESYSTEM_init();
+	
+	
+	
+	
+	
 	
 	
 	

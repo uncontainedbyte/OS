@@ -29,9 +29,10 @@ typedef struct{
 	uint48 inode_ptr2; // 128B second ptr
 }__attribute__((packed)) Directory_Table_Header_Index; //10B
 typedef struct{
+	uint8 type;
 	Directory_Table_Header_Index indexes[15];
 	uint48 nextBlock;
-	uint8 reserved[40];
+	uint8 reserved[39];
 }__attribute__((packed)) Directory_Table_Header; //256B
 typedef struct{
 	char data[256];
@@ -236,9 +237,10 @@ int main(int argc, char* argv[]){
 	
 	std::cout<<"Generating Root Directory..."<<std::endl;
 	Directory_Table root;
+	root.header.type = 'D';
 	index+=1;
 	
-	for(int s=0;s<40;s++){
+	for(int s=0;s<39;s++){
 		root.header.reserved[s] = 0;
 	}
 	
