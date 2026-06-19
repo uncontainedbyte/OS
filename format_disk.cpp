@@ -248,7 +248,7 @@ int main(int argc, char* argv[]){
 	
 	for(int s=0;s<15;s++){
 		root.header.indexes[s].free_mask = 0;
-		root.header.indexes[s].split_mask = 0;
+		root.header.indexes[s].split_mask = 1;
 		root.header.indexes[s].inode_ptr1 = make_uint48(0);
 		root.header.indexes[s].inode_ptr2 = make_uint48(0);
 	}

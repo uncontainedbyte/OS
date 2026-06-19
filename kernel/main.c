@@ -126,9 +126,29 @@ void execute(char* buf){
 	if(arg4[0]) printf("arg4: %s\n",arg4);
 	
 	if(cmpstr(cmd,"mkdir")){
-		FS_dir_create(arg0,arg1);
+		if(arg0==0||arg1==0){ printf("To Few Args\n"); return; }
+		uint8 r = FS_dir_create(arg0,arg1);
+		if(r) printf("Error: %s\n",FS_Result_str(r));
 	}else if(cmpstr(cmd,"rmdir")){
-		FS_dir_delete(arg0,arg1);
+		if(arg0==0||arg1==0){ printf("To Few Args\n"); return; }
+		uint8 r = FS_dir_delete(arg0,arg1);
+		if(r) printf("Error: %s\n",FS_Result_str(r));
+	}else if(cmpstr(cmd,"isdir")){
+		if(arg0==0){ printf("To Few Args\n"); return; }
+		uint8 r = FS_is_dir(arg0);
+		if(r) printf("Error: %s\n",FS_Result_str(r));
+	}else if(cmpstr(cmd,"mkfile")){
+		if(arg0==0||arg1==0){ printf("To Few Args\n"); return; }
+		uint8 r = FS_create(arg0,arg1);
+		if(r) printf("Error: %s\n",FS_Result_str(r));
+	}else if(cmpstr(cmd,"time")){
+		uint64 t=0;
+		rtc_get_seconds(&t);
+		printf("time: %u\n",(uint32)t);
+	}else if(cmpstr(cmd,"time-fancy")){
+		RTC_Time r;
+		rtc_read_time(&r);
+		printf("RTC: %u-%u-%u %u:%u:%u\n",r.year,r.month,r.day,r.hour,r.minute,r.second);
 	}
 }
 

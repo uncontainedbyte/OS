@@ -1,4 +1,6 @@
 #include "filesystem.h"
+#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
+
 
 typedef struct{
 	uint8 data[6];
@@ -184,16 +186,13 @@ void write_block(uint64 index,uint8* buffer){
 
 uint64 _super_index;
 Super_Block* super;
-Directory_Table* rootdir;
 uint8* filesystem_bitmap;
 uint64 blockcount;
 
-void* BLOCK_buffer;
 File_Handle* LoadedFiles;
 
 void flush_to_disk(){
 	write_block(_super_index,(uint8*)super);
-	write_block(convert_uint48(super->root_dir_ptr),(uint8*)rootdir);
 	for(int s=0;s<super->bitmap_block_count;s++){
 		write_block(convert_uint48(super->bitmap_start_block)+s,filesystem_bitmap+(s*4096));
 	}
@@ -210,286 +209,108 @@ uint64 get_free_block(){
 	return 0;
 }
 void mark_used(uint32 index){
-	filesystem_bitmap[(index+7)/8] |= (0b1<<(index%8));
+	filesystem_bitmap[index/8] |= (0b1<<(index%8));
 }
 void mark_free(uint32 index){
-	filesystem_bitmap[(index+7)/8] &= ~(0b1<<(index%8));
+	filesystem_bitmap[index/8] &= ~(0b1<<(index%8));
 }
 
 
 
-int FS_len(const char* name,int l){
-	for(int f=l;f>0;f--){
-		if(name[f-1]!='\0'){
-			return f;
-		}
+
+typedef struct {
+	uint8 split_test_mask;  // (split&THIS)==0000
+	uint8 split_test_value; // (split&0000)==THIS
+	uint8 free_mask;        // free&THIS
+	uint8 size_class;
+	uint16 entry_size;
+	uint8 claim_mask;
+	uint8 split_mask;
+	uint8 used_mask;
+	uint8 name_offset;
+	int16 inode_offset;
+} DirDescriptor;
+static const DirDescriptor DirDescriptor_entries[15] = {
+	{0xFF,0x01,0x01,1,256,0x01,0x10,0xFF,0x00,-1},
+	
+	{0xF0,0x10,0x10,2,128,0x10,0x40,0xF0,0x80,-1},
+	{0xC0,0x40,0x40,3,58,0x40,0x80,0xC0,0xC0,0xFA},
+	{0x80,0x80,0x80,4,26,0x80,0x00,0x80,0xE0,0xFA},
+	{0x40,0x40,0x40,4,26,0x40,0x00,0x40,0xC0,0xDA},
+	
+	{0x30,0x10,0x10,3,58,0x10,0x20,0x30,0x80,0xBA},
+	{0x20,0x20,0x20,4,26,0x20,0x00,0x20,0xA0,0xBA},
+	{0x10,0x10,0x10,4,26,0x10,0x00,0x10,0x80,0x9A},
+	
+	{0x0F,0x01,0x01,2,128,0x01,0x04,0x0F,0x00,-2},
+	{0x0C,0x04,0x04,3,58,0x04,0x08,0x0C,0x40,0x7A},
+	{0x08,0x08,0x08,4,26,0x08,0x00,0x08,0x60,0x7A},
+	{0x04,0x04,0x04,4,26,0x04,0x00,0x04,0x40,0x5A},
+	
+	{0x03,0x01,0x01,3,58,0x01,0x02,0x03,0x00,0x3A},
+	{0x02,0x02,0x02,4,26,0x02,0x00,0x02,0x20,0x3A},
+	{0x01,0x01,0x01,4,26,0x01,0x00,0x01,0x00,0x1A},
+};
+uint64 get_inode_ptr(Directory_Table* dir,int slot,const DirDescriptor* d){
+	if(d->inode_offset==-1){
+		return convert_uint48(dir->header.indexes[slot].inode_ptr1);
+	}else if(d->inode_offset==-2){
+		return convert_uint48(dir->header.indexes[slot].inode_ptr2);
+	}else{
+		uint48* inode = (uint48*)(((char*)(&(dir->entries[slot]))) + d->inode_offset);
+		return convert_uint48(*inode);
 	}
-	return 0;
 }
-uint64 FS_dir_get(Directory_Table* dir,const char* name){
-	for(int s=0;s<15;s++){
-		uint8 split = dir->header.indexes[s].split_mask;
-		uint8 free = dir->header.indexes[s].free_mask;
-		
-		if(split==0b00000000){
-			if(free&0b1){
-				int size = FS_len(((char*)(dir->entries[s].A.data)),256);
-				int found = 1;
-				if(size!=strlen(name)) found = 0;
-				for(int c=0;c<size;c++){
-					if(name[c]!=dir->entries[s].A.data[c]){
-						found = 0;
-						break;
-					}
-				}
-				if(!found) continue;
-				return convert_uint48(dir->header.indexes[s].inode_ptr1);
-			}
-		}
-		
-		
-		
+void set_inode_ptr(Directory_Table* dir,int slot,const DirDescriptor* d,uint64 ptr){
+	if(d->inode_offset==-1){
+		dir->header.indexes[slot].inode_ptr1 = make_uint48(ptr);
+	}else if(d->inode_offset==-2){
+		dir->header.indexes[slot].inode_ptr2 = make_uint48(ptr);
+	}else{
+		uint48* inode = (uint48*)((char*)&dir->entries[slot] + d->inode_offset);
+		*inode = make_uint48(ptr);
 	}
-	
-	return 0;
-}
-uint64 FS_parse_path(const char* path){
-	
-	uint16 depth = 0;
-	uint16 index=0;
-	char* buf = kalloc(257);
-	for(int s=0;s<strlen(path);s++){
-		if(path[s]=='/'){
-			buf[index] = '\0';
-			index = 0;
-			uint64 address = 0;
-			
-			if(depth==0){
-				address = FS_dir_get(rootdir,buf);
-			}else{
-				address = FS_dir_get((Directory_Table*)BLOCK_buffer,buf);
-			}
-			
-		}
-		
-		buf[index] = path[s];
-		
-		
-	}
-	
-	
-	
-	
-	
-	
 }
 
-void add_to_name_dir_256B(const char* src,char* dest){
-	for(int s=0;s<256;s++){ dest[s]='\0'; }
-	for(int s=0;s<256;s++){
+
+
+
+void cpy_name_to_dir(const char* src,char* dest,int l){
+	for(int s=0;s<l;s++){ dest[s]='\0'; }
+	for(int s=0;s<l;s++){
 		if(src[s]=='\0') return;
 		dest[s] = src[s];
 	}
 }
-void add_to_name_dir_128B(const char* src,char* dest){
-	for(int s=0;s<128;s++){ dest[s]='\0'; }
-	for(int s=0;s<128;s++){
-		if(src[s]=='\0') return;
-		dest[s] = src[s];
-	}
-}
-void add_to_name_dir_64B(const char* src,char* dest){
-	for(int s=0;s<58;s++){ dest[s]='\0'; }
-	for(int s=0;s<58;s++){
-		if(src[s]=='\0') return;
-		dest[s] = src[s];
-	}
-}
-void add_to_name_dir_32B(const char* src,char* dest){
-	for(int s=0;s<26;s++){ dest[s]='\0'; }
-	for(int s=0;s<26;s++){
-		if(src[s]=='\0') return;
-		dest[s] = src[s];
-	}
-}
-void add_to_dir(const char* name,Directory_Table* dir,uint64 index){
+uint8 add_to_dir(const char* name,Directory_Table* dir,uint64 index){
 	uint16 length = strlen(name);
 	uint8 type = 0;
+	if(length<=26 ){ type=4; }else
+	if(length<=58 ){ type=3; }else
+	if(length<=128){ type=2; }else
 	if(length<=256){ type=1; }
-	if(length<=128){ type=2; }
-	if(length<=58){ type=3; }
-	if(length<=26){ type=4; }
+	
+	const DirDescriptor* dde = DirDescriptor_entries;
 	
 	for(int s=0;s<15;s++){
 		uint8 split = dir->header.indexes[s].split_mask;
 		uint8 free = dir->header.indexes[s].free_mask;
-		if(split==0b00000000){//256B
-			if(!(free&0b1)){
-				if(type==1){
-					add_to_name_dir_256B(name,(char*)&dir->entries[s].A);
-					dir->header.indexes[s].inode_ptr1 = make_uint48(index);
-					dir->header.indexes[s].free_mask=0b00000001;
-					return;
-				}else if(type>1){
-					dir->header.indexes[s].split_mask|=0b00010000;
-				}
-			}
-		}
-		if((split&0xF0)==0b00010000){//128B
-			if(!(free&0b10000)){
-				if(type==2){
-					add_to_name_dir_128B(name,(char*)&dir->entries[s].B.data1);
-					dir->header.indexes[s].inode_ptr1 = make_uint48(index);
-					dir->header.indexes[s].free_mask|=0b00010000;
-					return;
-				}else if(type>2){
-					dir->header.indexes[s].split_mask|=0b01000000;
-				}
-			}
-		}
-		if((split&0xC0)==0b01000000){//64B
-			if(!(free&0b1000000)){
-				if(type==3){
-					add_to_name_dir_64B(name,(char*)&dir->entries[s].C.data1);
-					dir->entries[s].C.inode_ptr1 = make_uint48(index);
-					dir->header.indexes[s].free_mask|=0b01000000;
-					return;
-				}else if(type>3){
-					dir->header.indexes[s].split_mask|=0b10000000;
-				}
-			}
-		}
-		if((split&0x80)==0b10000000){//32B
-			if(!(free&0b10000000)){
-				if(type==4){
-					add_to_name_dir_32B(name,(char*)&dir->entries[s].D.data1);
-					dir->entries[s].D.inode_ptr1 = make_uint48(index);
-					dir->header.indexes[s].free_mask|=0b10000000;
-					return;
-				}
-			}
-		}
-		if((split&0x40)==0b01000000){//32B
-			if(!(free&0b1000000)){
-				if(type==4){
-					add_to_name_dir_32B(name,(char*)&dir->entries[s].D.data2);
-					dir->entries[s].D.inode_ptr2 = make_uint48(index);
-					dir->header.indexes[s].free_mask|=0b01000000;
-					return;
-				}
-			}
-		}
-		if((split&0x30)==0b00010000){//64B
-			if(!(free&0b10000)){
-				if(type==3){
-					add_to_name_dir_64B(name,(char*)&dir->entries[s].C.data2);
-					dir->entries[s].C.inode_ptr2 = make_uint48(index);
-					dir->header.indexes[s].free_mask|=0b00010000;
-					return;
-				}else if(type>3){
-					dir->header.indexes[s].split_mask|=0b00100000;
-				}
-			}
-		}
-		if((split&0x20)==0b00100000){//32B
-			if(!(free&0b100000)){
-				if(type==4){
-					add_to_name_dir_32B(name,(char*)&dir->entries[s].D.data3);
-					dir->entries[s].D.inode_ptr3 = make_uint48(index);
-					dir->header.indexes[s].free_mask|=0b00100000;
-					return;
-				}
-			}
-		}
-		if((split&0x10)==0b00010000){//32B
-			if(!(free&0b10000)){
-				if(type==4){
-					add_to_name_dir_32B(name,(char*)&dir->entries[s].D.data4);
-					dir->entries[s].D.inode_ptr4 = make_uint48(index);
-					dir->header.indexes[s].free_mask|=0b00010000;
-					return;
-				}
-			}
-		}
-		if((split&0xF) ==0b00000000){//128B
-			if(!(free&0b1)){
-				if(type==2){
-					add_to_name_dir_128B(name,(char*)&dir->entries[s].B.data2);
-					dir->header.indexes[s].inode_ptr2 = make_uint48(index);
-					dir->header.indexes[s].free_mask|=0b00000001;
-					return;
-				}else if(type>2){
-					dir->header.indexes[s].split_mask|=0b00000100;
-				}
-			}
-		}
-		if((split&0xC) ==0b00000100){//64B
-			if(!(free&0b100)){
-				if(type==3){
-					add_to_name_dir_64B(name,(char*)&dir->entries[s].C.data3);
-					dir->entries[s].C.inode_ptr3 = make_uint48(index);
-					dir->header.indexes[s].free_mask|=0b00000100;
-					return;
-				}else if(type>3){
-					dir->header.indexes[s].split_mask|=0b00001000;
-				}
-			}
-		}
-		if((split&0x8) ==0b00001000){//32B
-			if(!(free&0b1000)){
-				if(type==4){
-					add_to_name_dir_32B(name,(char*)&dir->entries[s].D.data5);
-					dir->entries[s].D.inode_ptr5 = make_uint48(index);
-					dir->header.indexes[s].free_mask|=0b00001000;
-					return;
-				}
-			}
-		}
-		if((split&0x4) ==0b00000100){//32B
-			if(!(free&0b100)){
-				if(type==4){
-					add_to_name_dir_32B(name,(char*)&dir->entries[s].D.data6);
-					dir->entries[s].D.inode_ptr6 = make_uint48(index);
-					dir->header.indexes[s].free_mask|=0b00000100;
-					return;
-				}
-			}
-		}
-		if((split&0x3) ==0b00000000){//64B
-			if(!(free&0b1)){
-				if(type==3){
-					add_to_name_dir_64B(name,(char*)&dir->entries[s].C.data4);
-					dir->entries[s].C.inode_ptr4 = make_uint48(index);
-					dir->header.indexes[s].free_mask|=0b00000001;
-					return;
-				}else if(type>3){
-					dir->header.indexes[s].split_mask|=0b00000010;
-				}
-			}
-		}
-		if((split&0x2) ==0b00000010){//32B
-			if(!(free&0b10)){
-				if(type==4){
-					add_to_name_dir_32B(name,(char*)&dir->entries[s].D.data7);
-					dir->entries[s].D.inode_ptr7 = make_uint48(index);
-					dir->header.indexes[s].free_mask|=0b00000010;
-					return;
-				}
-			}
-		}
-		{//32B
-			if(!(free&0b1)){
-				if(type==4){
-					add_to_name_dir_32B(name,(char*)&dir->entries[s].D.data8);
-					dir->entries[s].D.inode_ptr8 = make_uint48(index);
-					dir->header.indexes[s].free_mask|=0b00000001;
-					return;
-				}
-			}
-		}
-	}
+		
+		for(int ss=0;ss<15;ss++){
+			if((split&dde[ss].split_test_mask)==dde[ss].split_test_value){
+				if(!(free&dde[ss].free_mask)){
+					if(dde[ss].size_class==type){
+						cpy_name_to_dir(name,(char*)&dir->entries[s]+dde[ss].name_offset,dde[ss].entry_size);
+						set_inode_ptr(dir,s,&(dde[ss]),index);
+						dir->header.indexes[s].free_mask|=dde[ss].claim_mask;
+						return FS_Success;
+					}else if(type>dde[ss].size_class&&dde[ss].size_class!=4){
+						dir->header.indexes[s].split_mask |= dde[ss].split_mask;
+						split |= dde[ss].split_mask;
+	}}}}}
 	
 	printf("Directory Full\n");
+	return FS_Fail;
 }
 
 uint8 FS_namecmp(const char* a,const char* b,uint16 B){
@@ -500,141 +321,194 @@ uint8 FS_namecmp(const char* a,const char* b,uint16 B){
 		if(a[s]=='\0') return 1;
 	}
 }
-void remove_from_dir(const char* name,Directory_Table* dir){
+uint8 find_in_dir(const char* name,Directory_Table* dir,int* index,uint8* index_mask,uint64* ptr){
+	int ____NULL_1;
+	uint8 ____NULL_2;
+	uint64 ____NULL_3;
+	if(index==0) index=&____NULL_1;
+	if(index_mask==0) index_mask=&____NULL_2;
+	if(ptr==0) ptr=&____NULL_3;
 	
 	uint16 length = strlen(name);
 	uint8 type = 0;
+	if(length<=26 ){ type=4; }else
+	if(length<=58 ){ type=3; }else
+	if(length<=128){ type=2; }else
 	if(length<=256){ type=1; }
-	if(length<=128){ type=2; }
-	if(length<=58){ type=3; }
-	if(length<=26){ type=4; }
+	
+	const DirDescriptor* dde = DirDescriptor_entries;
 	
 	for(int s=0;s<15;s++){
 		uint8 split = dir->header.indexes[s].split_mask;
 		uint8 free = dir->header.indexes[s].free_mask;
-		if(split==0b00000000){//256B
-			if(free&0b1){
-				if(type==1){
-					if(FS_namecmp(name,(char*)&dir->entries[s].A,256)){
-						dir->header.indexes[s].free_mask=0;
-						return;
-					}
-				}
-			}
-		}
-		if((split&0xF0)==0b00010000){//128B
-			if(free&0b10000){
-				if(type==2){
-					if(FS_namecmp(name,(char*)&dir->entries[s].B.data1,128)){
-						dir->header.indexes[s].free_mask&=0b00001111;
-						return;
-					}
-				}
-			}
-		}
-		if((split&0xC0)==0b01000000){//64B
-			if(free&0b1000000){
-				if(type==3){
-					if(FS_namecmp(name,(char*)&dir->entries[s].C.data1,58)){
-						dir->header.indexes[s].free_mask&=0b00111111;
-						return;
-					}
-				}
-			}
-		}
-		if((split&0x80)==0b10000000){//32B
-			if(free&0b10000000){
-				if(type==4){
-					if(FS_namecmp(name,(char*)&dir->entries[s].D.data1,26)){
-						dir->header.indexes[s].free_mask&=0b01111111;
-						return;
-					}
-				}
-			}
-		}
-		if((split&0x40)==0b01000000){//32B
-			if(free&0b1000000){
-				if(type==4){
-					if(FS_namecmp(name,(char*)&dir->entries[s].D.data2,26)){
-						dir->header.indexes[s].free_mask&=0b10111111;
-						return;
-					}
-				}
-			}
-		}
-		if((split&0x30)==0b00010000){//64B
-			if(free&0b10000){
-				if(type==3){
-					if(FS_namecmp(name,(char*)&dir->entries[s].C.data2,58)){
-						dir->header.indexes[s].free_mask&=0b11001111;
-						return;
-		}}}}
-		if((split&0x20)==0b00100000){//32B
-			if(free&0b100000){
-				if(type==4){
-					if(FS_namecmp(name,(char*)&dir->entries[s].D.data3,26)){
-						dir->header.indexes[s].free_mask&=0b11011111;
-						return;
-		}}}}
-		if((split&0x10)==0b00010000){//32B
-			if(free&0b10000){
-				if(type==4){
-					if(FS_namecmp(name,(char*)&dir->entries[s].D.data4,26)){
-						dir->header.indexes[s].free_mask&=0b11101111;
-						return;
-		}}}}
-		if((split&0xF) ==0b00000000){//128B
-			if(free&0b1){
-				if(type==2){
-					if(FS_namecmp(name,(char*)&dir->entries[s].B.data2,128)){
-						dir->header.indexes[s].free_mask&=0b11110000;
-						return;
-		}}}}
-		if((split&0xC) ==0b00000100){//64B
-			if(free&0b100){
-				if(type==3){
-					if(FS_namecmp(name,(char*)&dir->entries[s].C.data3,58)){
-						dir->header.indexes[s].free_mask&=0b11110011;
-						return;
-		}}}}
-		if((split&0x8) ==0b00001000){//32B
-			if(free&0b1000){
-				if(type==4){
-					if(FS_namecmp(name,(char*)&dir->entries[s].D.data5,26)){
-						dir->header.indexes[s].free_mask&=0b11110111;
-						return;
-		}}}}
-		if((split&0x4) ==0b00000100){//32B
-			if(free&0b100){
-				if(type==4){
-					if(FS_namecmp(name,(char*)&dir->entries[s].D.data6,26)){
-						dir->header.indexes[s].free_mask&=0b11111011;
-						return;
-		}}}}
-		if((split&0x3) ==0b00000000){//64B
-			if(free&0b1){
-				if(type==3){
-					if(FS_namecmp(name,(char*)&dir->entries[s].C.data4,58)){
-						dir->header.indexes[s].free_mask&=0b11111100;
-						return;
-		}}}}
-		if((split&0x2) ==0b00000010){//32B
-			if(free&0b10){
-				if(type==4){
-					if(FS_namecmp(name,(char*)&dir->entries[s].D.data7,26)){
-						dir->header.indexes[s].free_mask&=0b11111101;
-						return;
-		}}}}
-		{//32B
-			if(free&0b1){
-				if(type==4){
-					if(FS_namecmp(name,(char*)&dir->entries[s].D.data8,26)){
-						dir->header.indexes[s].free_mask&=0b11111110;
-						return;
-		}}}}
+		
+		for(int ss=0;ss<15;ss++){
+			if((split&dde[ss].split_test_mask)==dde[ss].split_test_value){
+				if(free&dde[ss].free_mask){
+					if(dde[ss].size_class==type){
+						if(FS_namecmp(name,(char*)&dir->entries[s]+dde[ss].name_offset,dde[ss].entry_size)){
+							*index = s; *index_mask = dde[ss].used_mask;
+							*ptr = get_inode_ptr(dir,s,&(dde[ss]));
+							return FS_Success;
+		}}}}}
+		
 	}
 	
+	*ptr = 0;
+	*index = -1;
+	*index_mask = 0;
+	return FS_Fail;
+}
+
+int FS_len(const char* name,int l){
+	for(int f=l;f>0;f--){
+		if(name[f-1]!='\0'){
+			return f;
+		}
+	}
+	return 0;
+}
+uint8 format_path(char* path){
+	int len = 0;
+	while(path[len]!='\0'){
+		if(path[len]=='/'&&path[len+1]=='/') return FS_InvalidPath;
+		len++;
+	}
+	if(len==0) return FS_Success;
+	if(path[0]=='/'){
+		for(int s=0;s<len;s++){
+			path[s] = path[s+1];
+		}
+		len--;
+	}
+	if(len>0&&path[len-1]=='/') path[len-1]='\0';
+	return FS_Success;
+}
+uint8 FS_itoritive_parse_path(const char* path,Directory_Table* dir,uint16* depth,uint64* index){
+	if(path[0]=='\0') return FS_Success;
 	
+	uint64 ptr = 0;
+	int s=0;
+	{
+		char buffer[257];
+		memset(buffer,0,257);
+		
+		while(1){
+			if(path[s]=='/')  break;
+			if(path[s]=='\0') break;
+			if(s>256) return FS_NameToLong;
+			buffer[s] = path[s];
+			s++;
+		}
+		buffer[s] = '\0';
+		
+		find_in_dir(buffer,dir,0,0,&ptr);
+		
+		if(ptr==0){ return FS_NotFound; }
+		*index = ptr;
+		
+		if(path[s]=='\0') return FS_Success;
+	}
+	
+	*depth += 1;
+	uint8 block_buffer[4096];
+	read_block(ptr,block_buffer);
+	if(((char*)block_buffer)[0] != 'D') return FS_NotDir;
+	return FS_itoritive_parse_path(path+s+1,(Directory_Table*)block_buffer,depth,index);
+}
+uint8 FS_parse_path(const char* path,Directory_Table* dir,uint16* depth,uint64* index){
+	if(index==0||path==0){
+		printf("<FS_parse_path> Requires index/path ptr(s)");
+		asm volatile("hlt");
+		while(1);
+	}
+	char p[MAX_PATH_LENGTH];
+	memcpy(p,path,strlen(path)+1);
+	uint8 E = format_path(p);
+	
+	if(E) return E;
+	if(dir==0){
+		uint8 block_buffer[4096];
+		read_block(convert_uint48(super->root_dir_ptr),block_buffer);
+		*index = convert_uint48(super->root_dir_ptr);
+		Directory_Table* dr = (Directory_Table*)block_buffer;
+		if(depth==0){
+			uint16 d;
+			return FS_itoritive_parse_path(p,dr,&d,index);
+		}else{
+			*depth = 0;
+			return FS_itoritive_parse_path(p,dr,depth,index);
+	}}else{
+		if(depth==0){
+			uint16 d;
+			return FS_itoritive_parse_path(p,dir,&d,index);
+		}else{
+			*depth = 0;
+			return FS_itoritive_parse_path(p,dir,depth,index);
+	}}
+}
+
+void cpy_dir_name_to_buf(const char* src,char* dest,int l){
+	for(int s=0;s<l;s++){
+		dest[s] = src[s];
+	}
+	dest[l] = '\0';
+}
+uint8 index_dir(Directory_Table* dir,uint32 index,char* name,uint64* ptr){
+	const DirDescriptor* dde = DirDescriptor_entries;
+	int i=0;
+	for(int s=0;s<15;s++){
+		uint8 split = dir->header.indexes[s].split_mask;
+		uint8 free = dir->header.indexes[s].free_mask;
+		
+		for(int ss=0;ss<15;ss++){
+			if((split&dde[ss].split_test_mask)==dde[ss].split_test_value){
+				if(free&dde[ss].free_mask){
+					if(index==i){
+						cpy_dir_name_to_buf((char*)&dir->entries[s]+dde[ss].name_offset,name,dde[ss].entry_size);
+						*ptr = get_inode_ptr(dir,s,&(dde[ss]));
+						return FS_Success;
+					}else{ i++; }
+	}}}}
+	
+	*ptr = 0;
+	return FS_Fail;
+}
+
+void itoritive_free_dir(Directory_Table* dir){
+	if(dir->header.type != 'D') return;
+	
+	uint32 s=0;
+	uint64 ptr=0;
+	char null[257];
+	while(!index_dir(dir,s,null,&ptr)){
+		if(ptr==0) return;
+		uint8 block_buffer[4096];
+		read_block(ptr,block_buffer);
+		Directory_Table* current = (Directory_Table*)block_buffer;
+		itoritive_free_dir(current);
+		mark_free(ptr);
+		s++;
+	}
+	
+}
+uint8 remove_from_dir(const char* name,Directory_Table* dir){
+	
+	uint8 index_mask = 0;
+	int index = 0;
+	uint64 ptr=0;
+	uint8 E = find_in_dir(name,dir,&index,&index_mask,&ptr);
+	if(E) return E;
+	
+	uint8 block_buffer[4096];
+	read_block(ptr,block_buffer);
+	
+	Directory_Table* current = (Directory_Table*)block_buffer;
+	itoritive_free_dir(current);
+	mark_free(ptr);
+	
+	dir->header.indexes[index].free_mask &= (~index_mask)&0xFE;
+	return FS_Success;
 }
 
 void desplit_dir(Directory_Table* dir){
@@ -681,20 +555,23 @@ void desplit_dir(Directory_Table* dir){
 		}
 		if((split&0b010000)){                       // Merge s3-128B & s4-128B -> 256B
 			if(!(free&0b11111111)){
-				dir->header.indexes[s].split_mask = 0;
+				dir->header.indexes[s].split_mask = 1;
 			}
 		}
 	}
 	
-	
 }
 
 uint8 FS_dir_create(const char* path,const char* name){
-	BLOCK_buffer = (void*)rootdir;
+	uint64 path_end;
+	uint8 E = FS_parse_path(path,0,0,&path_end);
+	if(E) return E;
+	
+	uint8 block_buffer[4096];
+	read_block(path_end,block_buffer);
 	
 	// after parsing path
-	
-	Directory_Table* dir = (Directory_Table*)BLOCK_buffer;
+	Directory_Table* dir = (Directory_Table*)block_buffer;
 	
 	uint64 index = get_free_block();
 	if(index==0) return FS_NoSpace;
@@ -703,40 +580,112 @@ uint8 FS_dir_create(const char* path,const char* name){
 	new_dir.header.type = 'D';
 	
 	// clear new directory
-	for(int s=0;s<39;s++){ new_dir.header.reserved[s] = 0; }
+	for(int s=0;s<ARRAY_SIZE(new_dir.header.reserved);s++){ new_dir.header.reserved[s] = 0; }
 	new_dir.header.nextBlock = make_uint48(0);
 	for(int s=0;s<15;s++){
 		new_dir.header.indexes[s].free_mask = 0;
-		new_dir.header.indexes[s].split_mask = 0;
+		new_dir.header.indexes[s].split_mask = 1;
 		new_dir.header.indexes[s].inode_ptr1 = make_uint48(0);
 		new_dir.header.indexes[s].inode_ptr2 = make_uint48(0);
 	}
 	
 	write_block(index,(uint8*)&new_dir);
-	mark_used(index);
 	
 	// add new directory to existing directory
-	add_to_dir(name,dir,index);
+	E = add_to_dir(name,dir,index);
+	if(E) return E;
+	
+	write_block(path_end,block_buffer);
+	
+	mark_used(index);
 	
 	flush_to_disk();
 	return FS_Success;
 }
 uint8 FS_dir_delete(const char* path,const char* name){
-	BLOCK_buffer = (void*)rootdir;
+	uint64 path_end;
+	uint8 E = FS_parse_path(path,0,0,&path_end);
+	if(E) return E;
+	
+	uint8 block_buffer[4096];
+	read_block(path_end,block_buffer);
 	
 	// after parsing path
 	
-	Directory_Table* dir = (Directory_Table*)BLOCK_buffer;
+	Directory_Table* dir = (Directory_Table*)block_buffer;
 	
-	remove_from_dir(name,dir);
+	E = remove_from_dir(name,dir);
+	if(E) return E;
 	
 	desplit_dir(dir);
+	
+	write_block(path_end,block_buffer);
 	
 	flush_to_disk();
 	return FS_Success;
 }
-
-
+uint8 FS_exists(const char* path){
+	uint64 path_end;
+	uint8 E = FS_parse_path(path,0,0,&path_end);
+	return E;
+}
+uint8 FS_is_dir(const char* path){
+	uint64 path_end;
+	uint8 E = FS_parse_path(path,0,0,&path_end);
+	if(E) return E;
+	
+	uint8 block_buffer[4096];
+	read_block(path_end,block_buffer);
+	if(((char*)block_buffer)[0] == 'D') return FS_Success;
+	return FS_Fail;
+}
+uint8 FS_create(const char* path,const char* name){
+	uint64 path_end;
+	uint8 E = FS_parse_path(path,0,0,&path_end);
+	if(E) return E;
+	
+	uint8 block_buffer[4096];
+	read_block(path_end,block_buffer);
+	
+	Directory_Table* dir = (Directory_Table*)block_buffer;
+	
+	uint64 index = get_free_block();
+	if(index==0) return FS_NoSpace;
+	
+	Inode file;
+	file.header.type = 'F';
+	file.header.flag_mask = 0x04;
+	file.header.owner_id = 0;
+	file.header.user_permissions = 0b01010101;
+	for(int s=0;s<8;s++){
+		file.header.group_permissions[s].group_id = 0;
+		file.header.group_permissions[s].permissions = 0;
+	}
+	file.header.file_size = 0;
+	uint64 time=0;
+	E = rtc_get_seconds(&time);
+	if(E) time=0;
+	
+	file.header.Created_Timestamp = make_uint40(time);
+	file.header.Modified_Timestamp = make_uint40(time);
+	file.header.Accessed_Timestamp = make_uint40(time);
+	file.header.Moved_Timestamp = make_uint40(time);
+	
+	for(int s=0;s<ARRAY_SIZE(file.header.reserved);s++){ file.header.reserved[s] = 0; }
+	for(int s=0;s<3072;s++){ file.inlined_file[s] = 0; }
+	
+	write_block(index,(uint8*)&file);
+	
+	E = add_to_dir(name,dir,index);
+	if(E) return E;
+	
+	write_block(path_end,block_buffer);
+	
+	mark_used(index);
+	
+	flush_to_disk();
+	return FS_Success;
+}
 
 
 
@@ -762,25 +711,19 @@ void FILESYSTEM_init(){
 	}
 	if(!found){
 		free_pages((uint32)buffer,1);
-		printf("no file system found");
+		printf("no file system found\n");
 		printf("halting");
 		asm volatile("hlt");
 		while(1);
 	}
 	
-	blockcount = super->bitmap_block_count;
+	blockcount = super->total_blocks;
 	
-	buffer = (uint8*)alloc_pages(blockcount); // filesystem_bitmap
-	for(int s=0;s<blockcount;s++){
+	buffer = (uint8*)alloc_pages(super->bitmap_block_count); // filesystem_bitmap
+	for(int s=0;s<super->bitmap_block_count;s++){
 		read_block(s+convert_uint48(super->bitmap_start_block),buffer+(s*4096));
 	}
 	filesystem_bitmap = buffer;
-	
-	buffer = (uint8*)alloc_pages(1); // rootdir
-	read_block(convert_uint48(super->root_dir_ptr),buffer);
-	rootdir = (Directory_Table*)buffer;
-	
-	BLOCK_buffer = (void*)alloc_pages(1);
 	
 }
 
@@ -819,14 +762,14 @@ void FILESYSTEM_init(){
 
 
 /// Directory_Table_Header_Index -> split_mask -> bits
-// 00000000 -> [256] 1-entry
-// 00001000 -> {[128][128]} 2-entry
-// 00001010 -> {[128]{[64][64]}} 3-entry
-// 00001011 -> {[128]{[64]{[32][32]}}} 4-entry
-// 00001111 -> {[128]{{[32][32]}{[32][32]}}} 5-entry
-// 00101111 -> {{[64][64]}{{[32][32]}{[32][32]}}} 6-entry
-// 00111111 -> {{[64]{[32][32]}}{{[32][32]}{[32][32]}}} 7-entry
-// 01111111 -> {{{[32][32]}{[32][32]}}{{[32][32]}{[32][32]}}} 8-entry
+// 10000000 -> [256] 1-entry
+// 10001000 -> {[128][128]} 2-entry
+// 10001010 -> {[128]{[64][64]}} 3-entry
+// 10001011 -> {[128]{[64]{[32][32]}}} 4-entry
+// 10001111 -> {[128]{{[32][32]}{[32][32]}}} 5-entry
+// 10101111 -> {{[64][64]}{{[32][32]}{[32][32]}}} 6-entry
+// 10111111 -> {{[64]{[32][32]}}{{[32][32]}{[32][32]}}} 7-entry
+// 11111111 -> {{{[32][32]}{[32][32]}}{{[32][32]}{[32][32]}}} 8-entry
 // the 8th bit is unused
 // 1 is the start of a new entry
 // 0 is apart of the last entry

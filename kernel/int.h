@@ -260,12 +260,21 @@ static inline void memset(void* ptr,uint8 value,uint32 size){
 	uint8* p = ptr;
 	while(size--) *p++ = value;
 }
-static inline void memcpy(void* dest,void* src,uint32 size){
+static inline void memcpy(void* dest,const void* src,uint32 size){
 	uint8* d = dest;
-	uint8* s = dest;
-	while(size--) *d = *s;
+	const uint8* s = src;
+	while(size--) d[size] = s[size];
 }
-
+static inline uint8 memcmp(const void* data1,const void* data2,uint32 size){
+	uint32 i = 0;
+	const uint8* d1=data1;
+	const uint8* d2=data2;
+	while(i<size){
+		if(d1[i]!=d2[i]) return 0;
+		i++;
+	}
+	return 1;
+}
 
 
 
