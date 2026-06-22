@@ -13,6 +13,7 @@ void map_page(uint32 virt,uint32 phys,uint32 flags);
 
 void* kalloc(uint32 count);
 void kfree(void* ptr);
+void* krealloc(void* ptr,uint32 new_size);
 
 void MEM_print_memory_map();
 void MEM_printPageBitmap();

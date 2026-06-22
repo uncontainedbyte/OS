@@ -23,7 +23,127 @@ void ____testPrint(){
 
 
 
+uint8 _exe_ls(char* arg0){
+	char type = FS_is_dir(arg0);
+	
+	if(type==1||type==FS_NotDir){
+		printf("Not A Directory\n");
+		return FS_Fail;
+	}else if(type==FS_NotFound){
+		printf("Invalid Path\n");
+		return FS_NotFound;
+	}
+	
+	int count=0;
+	char tmp[257];
+	char buf[4096];
+	while(FS_dir_get(arg0,count,tmp)==FS_Success){
+		strmerge(buf,arg0,tmp);
+		type = FS_is_dir(buf);
+		if(type==1){ printf("%#30%s\n",tmp);
+		}else{ printf("%#50%s\n",tmp); }
+		count++;
+	}
+	return 0;
+}
 
+int32 handle=0;
+uint8 _exe_openfile(char* arg0){
+	uint8 r = FS_open(arg0,&handle,3);
+	if(r){
+		printf("Failed to Load File\n");
+		printf("Error: %s\n",FS_Result_str(r));
+		return 1;
+	}
+	printf("File Opened Successfully\n");
+}
+uint8 _exe_closefile(){
+	uint8 r = FS_close(handle);
+	if(r){
+		printf("Failed to Close File\n");
+		printf("Error: %s\n",FS_Result_str(r));
+		return 1;
+	}
+	printf("File Closed Successfully\n");
+}
+uint8 _exe_read(char* arg0){
+	int n = stoi(arg0);
+	if(n==-1){
+		FS_file_size(handle,&n);
+	}
+	char* buf = kalloc(n+1);
+	if(!buf){
+		printf("Not Enough Memory\n");
+		return 1;
+	}
+	uint8 r = FS_read(handle,buf,n);
+	if(r){
+		printf("Failed to Read File\n");
+		printf("Error: %s\n",FS_Result_str(r));
+		kfree(buf);
+		return 1;
+	}
+	buf[n] = '\0';
+	printf("Reading %i Bytes\n%s\n",n,buf);
+	kfree(buf);
+	return 0;
+}
+uint8 _exe_write(char* arg0){
+	int n = strlen(arg0);
+	uint8 r = FS_write(handle,arg0,n);
+	if(r){
+		printf("Failed to Write File\n");
+		printf("Error: %s\n",FS_Result_str(r));
+		return 1;
+	}
+	printf("Wrote %i Bytes\n",n);
+	return 0;
+}
+
+uint8 _exe_mkdir(char* arg0,char* arg1){
+	uint8 r = FS_dir_create(arg0,arg1);
+	if(r){
+		printf("Failed to make Directory\n");
+		printf("Error: %s\n",FS_Result_str(r));
+		return 1;
+	}
+	
+	printf("Created \"%s\" in directory %s\n",arg1,arg0);
+	return 0;
+}
+uint8 _exe_rm(char* arg0,char* arg1){
+	uint8 r = FS_delete(arg0,arg1);
+	if(r){
+		printf("Failed to delete \"%s\"\n",arg1);
+		printf("Error: %s\n",FS_Result_str(r));
+		return 1;
+	}
+	
+	printf("Deleted \"%s\" at %s\n",arg1,arg0);
+	return 0;
+}
+uint8 _exe_isdir(char* arg0){
+	uint8 r = FS_is_dir(arg0);
+	if(r>1){
+		printf("Error: %s\n",FS_Result_str(r));
+		return 1;
+	}
+	
+	if(r==0) printf("Yes\n");
+	if(r==1) printf("No\n");
+	return 0;
+}
+uint8 _exe_mkfile(char* arg0,char* arg1){
+	uint8 r = FS_create(arg0,arg1);
+	if(r){
+		printf("Failed to make File\n");
+		printf("Error: %s\n",FS_Result_str(r));
+		return 1;
+	}
+	
+	printf("Created \"%s\" in directory %s\n",arg1,arg0);
+	return 0;
+}
 
 void parse_args(char* buf,char* cmd,char* arg0,char* arg1, char* arg2,char* arg3,char* arg4){
 	int i=0,s=0;
@@ -118,29 +238,26 @@ void execute(char* buf){
 	cmd[0]=0;arg0[0]=0;arg1[0]=0;arg2[0]=0;arg3[0]=0;arg4[0]=0;
 	parse_args(buf,cmd,arg0,arg1,arg2,arg3,arg4);
 	
-	printf("cmd: %s\n",cmd);
-	if(arg0[0]) printf("arg0: %s\n",arg0);
-	if(arg1[0]) printf("arg1: %s\n",arg1);
-	if(arg2[0]) printf("arg2: %s\n",arg2);
-	if(arg3[0]) printf("arg3: %s\n",arg3);
-	if(arg4[0]) printf("arg4: %s\n",arg4);
+	//printf("cmd: %s\n",cmd);
+	//if(arg0[0]) printf("arg0: %s\n",arg0);
+	//if(arg1[0]) printf("arg1: %s\n",arg1);
+	//if(arg2[0]) printf("arg2: %s\n",arg2);
+	//if(arg3[0]) printf("arg3: %s\n",arg3);
+	//if(arg4[0]) printf("arg4: %s\n",arg4);
 	
+	uint8 e=0;
 	if(cmpstr(cmd,"mkdir")){
 		if(arg0==0||arg1==0){ printf("To Few Args\n"); return; }
-		uint8 r = FS_dir_create(arg0,arg1);
-		if(r) printf("Error: %s\n",FS_Result_str(r));
-	}else if(cmpstr(cmd,"rmdir")){
+		e = _exe_mkdir(arg0,arg1);
+	}else if(cmpstr(cmd,"rm")){
 		if(arg0==0||arg1==0){ printf("To Few Args\n"); return; }
-		uint8 r = FS_dir_delete(arg0,arg1);
-		if(r) printf("Error: %s\n",FS_Result_str(r));
+		e = _exe_rm(arg0,arg1);
 	}else if(cmpstr(cmd,"isdir")){
 		if(arg0==0){ printf("To Few Args\n"); return; }
-		uint8 r = FS_is_dir(arg0);
-		if(r) printf("Error: %s\n",FS_Result_str(r));
+		e = _exe_isdir(arg0);
 	}else if(cmpstr(cmd,"mkfile")){
 		if(arg0==0||arg1==0){ printf("To Few Args\n"); return; }
-		uint8 r = FS_create(arg0,arg1);
-		if(r) printf("Error: %s\n",FS_Result_str(r));
+		e = _exe_mkfile(arg0,arg1);
 	}else if(cmpstr(cmd,"time")){
 		uint64 t=0;
 		rtc_get_seconds(&t);
@@ -149,7 +266,22 @@ void execute(char* buf){
 		RTC_Time r;
 		rtc_read_time(&r);
 		printf("RTC: %u-%u-%u %u:%u:%u\n",r.year,r.month,r.day,r.hour,r.minute,r.second);
+	}else if(cmpstr(cmd,"openfile")){
+		if(arg0==0){ printf("To Few Args\n"); return; }
+		e = _exe_openfile(arg0);
+	}else if(cmpstr(cmd,"closefile")){
+		e = _exe_closefile();
+	}else if(cmpstr(cmd,"read")){
+		if(arg0==0){ printf("To Few Args\n"); return; }
+		e = _exe_read(arg0);
+	}else if(cmpstr(cmd,"write")){
+		if(arg0==0){ printf("To Few Args\n"); return; }
+		e = _exe_write(arg0);
+	}else if(cmpstr(cmd,"ls")){
+		if(arg0==0){ printf("To Few Args\n"); return; }
+		e = _exe_ls(arg0);
 	}
+	if(e) printf("EXit-Code: %u\n",e);
 }
 
 

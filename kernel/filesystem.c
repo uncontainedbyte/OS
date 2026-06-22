@@ -1,5 +1,5 @@
 #include "filesystem.h"
-#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
+
 
 
 typedef struct{
@@ -7,7 +7,7 @@ typedef struct{
 }__attribute__((packed)) uint48;
 typedef struct{
 	uint8 data[5];
-}__attribute__((packed)) uint40;
+}__attribute__((packed)) int40;
 
 typedef struct{
 	uint8 free_mask;
@@ -80,10 +80,10 @@ typedef struct{
 	uint8 user_permissions;
 	Group_Permissions group_permissions[8];
 	uint64 file_size;
-	uint40 Created_Timestamp;//  the
-	uint40 Modified_Timestamp;// ED
-	uint40 Accessed_Timestamp;// group
-	uint40 Moved_Timestamp;//    _
+	int40 Created_Timestamp;//  the
+	int40 Modified_Timestamp;// ED
+	int40 Accessed_Timestamp;// group
+	int40 Moved_Timestamp;//    _
 	uint8 reserved[967];
 }__attribute__((packed)) Inode_Header; //1024B(1KB)
 typedef struct{
@@ -111,15 +111,19 @@ typedef struct{
 	uint32 bitmap_block_count; // 4B: Size of the bitmap section in blocks (0.0031% of drive)
 	uint48 journal_inode_ptr;  // 6B: Pointer to the Inode of the hidden Journal File
 	uint8  filesystem_state;   // 1B: Cleanly unmounted vs Dirty/Crashed flags
-	uint40 last_mounted_time;  // 5B
-	uint40 last_checked_time;  // 5B: For forcing filesystem consistency checks (fsck)
+	int40 last_mounted_time;  // 5B
+	int40 last_checked_time;  // 5B: For forcing filesystem consistency checks (fsck)
 	uint8  reserved[4049];
 } __attribute__((packed)) Super_Block; //4096B(4KB)
 
 typedef struct{
+	LinkedList_Node linkedlist_loaded;
+	
+	uint32 handle_id;
+	
 	uint64 standard_inode_ptr;
-	uint64 file_size;
-	uint64 current_seek_pos;
+	uint64 size;
+	uint64 seek;
 	
 	uint64 created_time;
 	uint64 modified_time;
@@ -127,15 +131,15 @@ typedef struct{
 	uint64 moved_time;
 	
 	uint8 flag_mask;
+	uint8 mode;
 } File_Handle;
-
 
 
 uint64 _convert_uint48(uint48 value){
 	uint64 val = *(uint64*)(&value.data);
 	return val & 0x0000FFFFFFFFFFFFULL;
 }
-uint64 _convert_uint40(uint40 value){
+uint64 _convert_int40(int40 value){
 	uint64 val = *(uint64*)(&value.data);
 	return val & 0x000000FFFFFFFFFFULL;
 }
@@ -148,12 +152,14 @@ uint64 convert_uint48(uint48 value){
 			((uint64)value.data[4] << 32)  |
 			((uint64)value.data[5] << 40);
 }
-uint64 convert_uint40(uint40 value){
-	return  ((uint64)value.data[0])        |
-			((uint64)value.data[1] << 8)   |
-			((uint64)value.data[2] << 16)  |
-			((uint64)value.data[3] << 24)  |
-			((uint64)value.data[4] << 32);
+int64 convert_int40(int40 value){
+	int64 result = ((uint64)value.data[0])       |
+				   ((uint64)value.data[1] << 8)  |
+				   ((uint64)value.data[2] << 16) |
+				   ((uint64)value.data[3] << 24) |
+				   ((uint64)value.data[4] << 32);
+	if(result & 0x0000008000000000ULL) result |= 0xFFFFFF0000000000ULL;
+	return result;
 }
 uint48 make_uint48(uint64 val){
 	uint48 out;
@@ -165,8 +171,8 @@ uint48 make_uint48(uint64 val){
 	out.data[5] = (val >> 40) & 0xFF;
 	return out;
 }
-uint40 make_uint40(uint64 val){
-	uint40 out;
+int40 make_int40(int64 val){
+	int40 out;
 	out.data[0] = val & 0xFF;
 	out.data[1] = (val >> 8) & 0xFF;
 	out.data[2] = (val >> 16) & 0xFF;
@@ -179,7 +185,7 @@ uint40 make_uint40(uint64 val){
 void read_block(uint64 index,uint8* buffer){
 	sata_read(index*8,8,buffer);
 }
-void write_block(uint64 index,uint8* buffer){
+void write_block(uint64 index,const uint8* buffer){
 	sata_write(index*8,8,buffer);
 }
 
@@ -187,9 +193,10 @@ void write_block(uint64 index,uint8* buffer){
 uint64 _super_index;
 Super_Block* super;
 uint8* filesystem_bitmap;
-uint64 blockcount;
+uint64 BlockCount;
 
-File_Handle* LoadedFiles;
+LinkedList LoadedFiles;
+uint32 __LoadedFiles_Handle_id = 1;
 
 void flush_to_disk(){
 	write_block(_super_index,(uint8*)super);
@@ -197,24 +204,43 @@ void flush_to_disk(){
 		write_block(convert_uint48(super->bitmap_start_block)+s,filesystem_bitmap+(s*4096));
 	}
 }
-uint64 get_free_block(){
-	for(int s=0;s<(blockcount+7)/8;s++){
-		for(int ss=0;ss<8;ss++){
-			if(!((filesystem_bitmap[s]>>ss)&0b1)){
-				return s*8+ss;
+void mark_used(uint32 index){
+	if(index >= BlockCount) return;
+	filesystem_bitmap[index/8] |= (0b1<<(index%8));
+}
+uint64 alloc_blocks(uint32 count){
+	uint32 run = 0;
+	uint64 start = 0;
+	
+	for(uint64 block = 1; block < BlockCount; block++){
+		if(!(filesystem_bitmap[block/8] & (1 << (block%8)))){
+			
+			if(run == 0) start = block;
+			
+			run++;
+			
+			if(run == count){
+				for(uint64 s=start; s<start+count; s++)mark_used(s);
+				return start;
 			}
+			
+		}else{
+			run = 0;
 		}
 	}
 	
 	return 0;
 }
-void mark_used(uint32 index){
-	filesystem_bitmap[index/8] |= (0b1<<(index%8));
+uint64 alloc_block(){
+	return alloc_blocks(1);
 }
 void mark_free(uint32 index){
+	if(index >= BlockCount) return;
 	filesystem_bitmap[index/8] &= ~(0b1<<(index%8));
 }
-
+void free_blocks(uint64 start, uint32 count){
+	for(uint64 s=start; s<start+count; s++) mark_free(s);
+}
 
 
 
@@ -455,6 +481,9 @@ void cpy_dir_name_to_buf(const char* src,char* dest,int l){
 	dest[l] = '\0';
 }
 uint8 index_dir(Directory_Table* dir,uint32 index,char* name,uint64* ptr){
+	uint64 _;
+	if(!ptr) ptr = &_;
+	
 	const DirDescriptor* dde = DirDescriptor_entries;
 	int i=0;
 	for(int s=0;s<15;s++){
@@ -562,6 +591,59 @@ void desplit_dir(Directory_Table* dir){
 	
 }
 
+void* find_file_handle_id(uint32 handle_id){
+	LinkedList_Node* cur = LoadedFiles.head;
+	for(;cur;cur=cur->next){
+		if(((File_Handle*)cur)->handle_id == handle_id){
+			return (void*)cur;
+		}
+	}
+}
+uint64 inode_get_disk_block(Inode* inode,uint64 file_block){
+	uint64 index = 0;
+	for(int s=0;s<307;s++){
+		Inode_File_Table_Entry* entry = &inode->table.entries[s];
+		
+		if(file_block>=index&&file_block<index+entry->length){
+			uint64 ptr = 0;
+			
+			ptr = convert_uint48(entry->file_block_ptr);
+			ptr += file_block - index;
+			
+			return ptr;
+		}
+		index+=entry->length;
+	}
+	return 0;
+}
+uint8 inode_resize(Inode* inode,uint64 new_size){
+	uint32 prev_block_count = ALIGN_UP(inode->header.file_size,4096)/4096;
+	uint32 new_block_count = ALIGN_UP(new_size,4096)/4096;
+	
+	if(prev_block_count >= new_block_count){
+		inode->header.file_size = new_size;
+		return FS_Success;
+	}
+	
+	uint32 s = 0;
+	for(;s<307;s++){
+		if(!inode->table.entries[s].length) break;
+		if(s==306) return FS_NoSpace;
+	}
+	
+	uint32 final_block_count = new_block_count - prev_block_count;
+	
+	uint32 index = alloc_blocks(final_block_count);
+	if(!index) return FS_NoSpace;
+	
+	inode->table.entries[s].file_block_ptr = make_uint48(index);
+	inode->table.entries[s].length = final_block_count;
+	
+	inode->header.file_size = new_size;
+	
+	return FS_Success;
+}
+
 uint8 FS_dir_create(const char* path,const char* name){
 	uint64 path_end;
 	uint8 E = FS_parse_path(path,0,0,&path_end);
@@ -573,7 +655,7 @@ uint8 FS_dir_create(const char* path,const char* name){
 	// after parsing path
 	Directory_Table* dir = (Directory_Table*)block_buffer;
 	
-	uint64 index = get_free_block();
+	uint64 index = alloc_block();
 	if(index==0) return FS_NoSpace;
 	
 	Directory_Table new_dir;
@@ -593,16 +675,14 @@ uint8 FS_dir_create(const char* path,const char* name){
 	
 	// add new directory to existing directory
 	E = add_to_dir(name,dir,index);
-	if(E) return E;
+	if(E){ mark_free(index); return E; }
 	
 	write_block(path_end,block_buffer);
-	
-	mark_used(index);
 	
 	flush_to_disk();
 	return FS_Success;
 }
-uint8 FS_dir_delete(const char* path,const char* name){
+uint8 FS_delete(const char* path,const char* name){
 	uint64 path_end;
 	uint8 E = FS_parse_path(path,0,0,&path_end);
 	if(E) return E;
@@ -649,7 +729,7 @@ uint8 FS_create(const char* path,const char* name){
 	
 	Directory_Table* dir = (Directory_Table*)block_buffer;
 	
-	uint64 index = get_free_block();
+	uint64 index = alloc_block();
 	if(index==0) return FS_NoSpace;
 	
 	Inode file;
@@ -662,14 +742,14 @@ uint8 FS_create(const char* path,const char* name){
 		file.header.group_permissions[s].permissions = 0;
 	}
 	file.header.file_size = 0;
-	uint64 time=0;
+	int64 time=0;
 	E = rtc_get_seconds(&time);
-	if(E) time=0;
+	if(E){ mark_free(index); time=0; }
 	
-	file.header.Created_Timestamp = make_uint40(time);
-	file.header.Modified_Timestamp = make_uint40(time);
-	file.header.Accessed_Timestamp = make_uint40(time);
-	file.header.Moved_Timestamp = make_uint40(time);
+	file.header.Created_Timestamp = make_int40(time);
+	file.header.Modified_Timestamp = make_int40(time);
+	file.header.Accessed_Timestamp = make_int40(time);
+	file.header.Moved_Timestamp = make_int40(time);
 	
 	for(int s=0;s<ARRAY_SIZE(file.header.reserved);s++){ file.header.reserved[s] = 0; }
 	for(int s=0;s<3072;s++){ file.inlined_file[s] = 0; }
@@ -677,20 +757,191 @@ uint8 FS_create(const char* path,const char* name){
 	write_block(index,(uint8*)&file);
 	
 	E = add_to_dir(name,dir,index);
-	if(E) return E;
+	if(E){ mark_free(index); return E; }
 	
 	write_block(path_end,block_buffer);
-	
-	mark_used(index);
 	
 	flush_to_disk();
 	return FS_Success;
 }
-
-
-
-
-
+uint8 FS_open(const char* path, int32* handle_id, uint8 mode){
+	uint64 path_end;
+	uint8 E = FS_parse_path(path,0,0,&path_end);
+	if(E) return E;
+	
+	Inode inode;
+	read_block(path_end,(uint8*)&inode);
+	
+	if(inode.header.type != 'F') return FS_IsADirectory;
+	
+	File_Handle* file = (File_Handle*)kalloc(sizeof(File_Handle));
+	file->size = inode.header.file_size;
+	file->created_time = convert_int40(inode.header.Created_Timestamp);
+	file->modified_time = convert_int40(inode.header.Modified_Timestamp);
+	file->accessed_time = convert_int40(inode.header.Accessed_Timestamp);
+	file->moved_time = convert_int40(inode.header.Moved_Timestamp);
+	file->flag_mask = inode.header.flag_mask;
+	file->standard_inode_ptr = path_end;
+	
+	file->seek = 0;
+	file->mode = mode;
+	
+	LIST_push_back(&LoadedFiles,&file->linkedlist_loaded);
+	
+	file->handle_id = __LoadedFiles_Handle_id;
+	__LoadedFiles_Handle_id++;
+	*handle_id = file->handle_id;
+	
+	return FS_Success;
+}
+uint8 FS_seek(int32 handle_id, int32 pos,uint8 mode){
+	File_Handle* file = (File_Handle*)find_file_handle_id(handle_id);
+	if(!file) return FS_Fail;
+	
+	if(mode==0){
+		if(file->size<=pos) return FS_Fail;
+		if(pos<0) return FS_Fail;
+		file->seek = pos;
+	}else if(mode==1){
+		if(file->size<=file->seek+pos) return FS_Fail;
+		if(file->seek+pos<0) return FS_Fail;
+		file->seek += pos;
+	}
+	return FS_Success;
+}
+uint8 FS_tell(int32 handle_id, int32* out){
+	File_Handle* file = (File_Handle*)find_file_handle_id(handle_id);
+	if(!file) return FS_Fail;
+	
+	*out = file->seek;
+	
+	return FS_Success;
+}
+uint8 FS_read(int32 handle_id,void* buffer,uint64 bytes_to_read){
+	File_Handle* file = (File_Handle*)find_file_handle_id(handle_id);
+	if(!file) return FS_Fail;
+	
+	if(!(file->mode&F_Read)) return FS_AccessDenied;
+	
+	if(file->seek>=file->size) return FS_Fail;
+	if(file->seek+bytes_to_read>file->size) return FS_Fail;
+	
+	Inode inode;
+	read_block(file->standard_inode_ptr,(uint8*)&inode);
+	
+	if(file->flag_mask & 0x04){ //  inlined file
+		file->flag_mask=0;
+		//memcpy(buffer,inode.inlined_file+file->seek,bytes_to_read);
+		//return FS_Success;
+	}
+	
+	uint64 remaining = bytes_to_read;
+	uint64 seek_offset = file->seek;
+	uint8* dst = buffer;
+	
+	while(remaining){
+		uint64 block_index  = seek_offset / 4096;
+		uint64 block_offset = seek_offset % 4096;
+		uint64 to_read = 4096 - block_offset;
+		if(to_read > remaining) to_read = remaining;
+		uint64 block_ptr = inode_get_disk_block(&inode,block_index);
+		
+		uint8 tmp_buf[4096];
+		read_block(block_ptr,tmp_buf);
+		
+		memcpy(dst,tmp_buf + block_offset,to_read);
+		
+		remaining -= to_read;
+		dst += to_read;
+		seek_offset += to_read;
+	}
+	
+	return FS_Success;
+}
+uint8 FS_write(int32 handle_id, const void* buffer, uint64 bytes_to_write){
+	File_Handle* file = (File_Handle*)find_file_handle_id(handle_id);
+	if(!file) return FS_Fail;
+	
+	if(!(file->mode&F_Write)) return FS_AccessDenied;
+	
+	Inode inode;
+	read_block(file->standard_inode_ptr,(uint8*)&inode);
+	
+	if(file->size<file->seek+bytes_to_write){
+		uint8 e = inode_resize(&inode,file->seek+bytes_to_write);
+		if(e) return e;
+		write_block(file->standard_inode_ptr,(uint8*)&inode);
+		file->size = inode.header.file_size;
+	}
+	
+	uint64 remaining = bytes_to_write;
+	uint64 seek_offset = file->seek;
+	const uint8* src = buffer;
+	
+	while(remaining){
+		uint64 block_index  = seek_offset / 4096;
+		uint64 block_offset = seek_offset % 4096;
+		
+		uint64 to_write = 4096 - block_offset;
+		if(to_write > remaining) to_write = remaining;
+		
+		uint64 block_ptr = inode_get_disk_block(&inode, block_index);
+		
+		uint8 tmp_buf[4096];
+		
+		if(block_offset == 0 && to_write == 4096){
+			write_block(block_ptr, src);
+		}else{
+			read_block(block_ptr, tmp_buf);
+			
+			memcpy(
+				tmp_buf + block_offset,
+				src,
+				to_write
+			);
+			
+			write_block(block_ptr, tmp_buf);
+		}
+		
+		remaining   -= to_write;
+		seek_offset += to_write;
+		src         += to_write;
+	}
+	
+	return FS_Success;
+}
+uint8 FS_close(int32 handle_id){
+	File_Handle* file = (File_Handle*)find_file_handle_id(handle_id);
+	if(!file) return FS_Fail;
+	
+	LIST_remove(&LoadedFiles,&(file->linkedlist_loaded));
+	
+	return FS_Success;
+}
+uint8 FS_file_size(int32 handle_id,uint32* out){
+	File_Handle* file = (File_Handle*)find_file_handle_id(handle_id);
+	if(!file) return FS_Fail;
+	
+	*out = file->size;
+	
+	return FS_Success;
+}
+uint8 FS_dir_get(const char* path,uint32 index,char* name){
+	uint64 path_end;
+	uint8 E = FS_parse_path(path,0,0,&path_end);
+	if(E) return E;
+	
+	uint8 block_buffer[4096];
+	read_block(path_end,block_buffer);
+	
+	Directory_Table* dir = (Directory_Table*)block_buffer;
+	
+	E = index_dir(dir,index,name,0);
+	
+	if(E) return FS_OverRead;
+	
+	return FS_Success;
+}
 
 
 
@@ -717,7 +968,7 @@ void FILESYSTEM_init(){
 		while(1);
 	}
 	
-	blockcount = super->total_blocks;
+	BlockCount = super->total_blocks;
 	
 	buffer = (uint8*)alloc_pages(super->bitmap_block_count); // filesystem_bitmap
 	for(int s=0;s<super->bitmap_block_count;s++){
@@ -725,6 +976,7 @@ void FILESYSTEM_init(){
 	}
 	filesystem_bitmap = buffer;
 	
+	LIST_init(&LoadedFiles);
 }
 
 

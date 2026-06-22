@@ -376,7 +376,7 @@ int sata_init(){
 }
 #define ATA_CMD_READ_DMA_EXT   0x25
 #define ATA_CMD_WRITE_DMA_EXT  0x35
-int ahci_rw(HBA_PORT* port,uint64 lba,uint32 count,void* buffer,int write){
+int ahci_rw(HBA_PORT* port,uint64 lba,uint32 count,const void* buffer,int write){
 	int slot = find_cmdslot(port);
 	if(slot < 0) return 0;
 	
@@ -426,7 +426,7 @@ int ahci_rw(HBA_PORT* port,uint64 lba,uint32 count,void* buffer,int write){
 int sata_read(uint64 lba,uint32 count,void* buffer){
 	return ahci_rw(sata0.port,lba,count,buffer,0);
 }
-int sata_write(uint64 lba,uint32 count,void* buffer){
+int sata_write(uint64 lba,uint32 count,const void* buffer){
 	return ahci_rw(sata0.port,lba,count,buffer,1);
 }
 

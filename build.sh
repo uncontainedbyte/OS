@@ -98,6 +98,9 @@ compile_16asm "boot/stage2.asm" &
 compile_asm "boot/kernel-entry.asm" &
 compile_asm "kernel/isr.asm" &
 
+compile_c "kernel/util/vector.c" &
+compile_c "kernel/util/linked-list.c" &
+
 compile_c "kernel/rtc.c" &
 compile_c "kernel/filesystem.c" &
 compile_c "kernel/pci.c" &
@@ -113,6 +116,8 @@ wait
 link_kernel "main.o" "display.o" "isr.o" \
 			"interrupts.o" "keyboard.o" "PIT.o" \
 			"memory.o" "pci.o" "filesystem.o" \
-			"rtc.o"
+			"rtc.o"\
+			\
+			"linked-list.o" "vector.o"
 
 create_floppy

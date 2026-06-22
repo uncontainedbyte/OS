@@ -235,6 +235,28 @@ void kfree(void* ptr){
 		last->next = block->next;
 	}
 }
+void* krealloc(void* ptr, uint32 new_size){
+	if(ptr == 0) return kalloc(new_size);
+	
+	if(new_size == 0){
+		kfree(ptr);
+		return 0;
+	}
+	
+	heap_block_t* block = (heap_block_t*)((char*)ptr - sizeof(heap_block_t));
+	
+	uint32 old_size = block->units * UNIT_SIZE;
+	
+	void* new_ptr = kalloc(new_size);
+	if(new_ptr == 0) return 0;
+	
+	uint32 size = (old_size<new_size)? old_size : new_size;
+	memcpy(new_ptr,ptr,size);
+	
+	kfree(ptr);
+	
+	return new_ptr;
+}
 
 void heap_dump(){
 	heap_block_t* cur = heap;
