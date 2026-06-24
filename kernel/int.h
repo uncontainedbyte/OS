@@ -30,7 +30,7 @@ typedef char* va_list;
 #define INT32_MAX   2147483647
 #define INT64_MAX   9223372036854775807LL
 
-#define container_of(ptr,type,member) ((type*)((char*)(ptr) - offsetof(type,member)))
+#define container_of(ptr,type,member) ((type*)((char*)(ptr) - __builtin_offsetof(type,member)))
 #define ARRAY_SIZE(x)   (sizeof(x)/sizeof((x)[0]))
 #define MIN(a,b)        ((a)<(b)?(a):(b))
 #define MAX(a,b)        ((a)>(b)?(a):(b))
@@ -91,9 +91,9 @@ static inline uint32 stou(const char* string){
 	while(string[i] == ' '){
 		i++;
 	}
-	while(string[i]>='0'&&'9'<=string[i]){
+	while(string[i]>='0'&&'9'>=string[i]){
 		out*=10;
-		out+= '0'+string[i];
+		out+= string[i] - '0';
 		i++;
 	}
 	return out;

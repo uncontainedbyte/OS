@@ -146,7 +146,7 @@ uint8 shift_map(uint8 sc) {
 	}
 }
 
-void keyboard_interrupt_handler(registers_t *r) {
+uint32 keyboard_interrupt_handler(registers_t *r) {
 	uint8 sc = inb(0x60);
 	uint8 released = sc & 0x80;
 	sc &= 0x7F;
@@ -176,9 +176,11 @@ void keyboard_interrupt_handler(registers_t *r) {
 		keyboard_buffer[keyboard_head] = key;
 		keyboard_head = next;
 	}
+	
+	return (uint32)r;
 }
 void keyboard_init(){
-	registerInterrupt(33,systemFlags,(uint32)keyboard_interrupt_handler);
+	registerInterrupt(33,systemFlags,keyboard_interrupt_handler);
 	pic_unmask_irq(1);
 }
 

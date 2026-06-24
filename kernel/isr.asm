@@ -12,16 +12,34 @@ isr_common_stub:
 	; 2. Call C handler
 	push esp ; push registers_t *r pointer
 	call isr_handler
-	pop eax ; clear pointer afterwards
-	; 3. Restore state
+	
+	add esp, 4
+	
+	mov esp, eax
+	
 	pop eax
+	
 	mov ds, ax
 	mov es, ax
 	mov fs, ax
 	mov gs, ax
+	
 	popa
-	add esp, 8 ; Cleans up the pushed error code and pushed ISR number
+	
+	add esp, 8
 	iret
+	
+	
+	;pop eax ; clear pointer afterwards
+	;; 3. Restore state
+	;pop eax
+	;mov ds, ax
+	;mov es, ax
+	;mov fs, ax
+	;mov gs, ax
+	;popa
+	;add esp, 8 ; Cleans up the pushed error code and pushed ISR number
+	;iret
 
 global isr0
 global isr1
@@ -76,7 +94,6 @@ global irq15
 %macro ISR_NOERR 1
 global isr%1
 isr%1:
-	cli
 	push dword 0
 	push dword %1
 	jmp isr_common_stub
@@ -85,7 +102,6 @@ isr%1:
 %macro ISR_ERR 1
 global isr%1
 isr%1:
-	cli
 	push dword %1
 	jmp isr_common_stub
 %endmacro
@@ -93,7 +109,6 @@ isr%1:
 %macro IRQ 2
 global irq%1
 irq%1:
-	cli
 	push dword 0
 	push dword %2
 	jmp isr_common_stub

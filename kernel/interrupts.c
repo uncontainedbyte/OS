@@ -37,11 +37,10 @@ typedef struct {
 	uint16 limit;
 	uint32 base;
 } __attribute__((packed)) idt_ptr_t;
-typedef void (*irq_handler_t)(registers_t *);
 
 idt_entry_t idt[256];
 idt_ptr_t idt_ptr;
-uint32 handler_functions[256];
+irq_handler_t handler_functions[256];
 
 extern void isr0(void);
 extern void isr1(void);
@@ -622,24 +621,21 @@ void UNHANDLED_INTERRUPT(int i){
 	}
 	asm volatile("hlt");
 }
-void isr_handler(registers_t *r){
-	uint32 handler = handler_functions[r->int_no];
+uint32 isr_handler(registers_t *r){
+	irq_handler_t handler = (irq_handler_t)handler_functions[r->int_no];
 	if(handler==0){ UNHANDLED_INTERRUPT(r->int_no); }
 	
-	asm volatile(
-			"pushl %0\n\t"
-			"call *%1\n\t"
-			"addl $4, %%esp"
-			:: "r"((uint32)r), "r"(handler)
-			:"eax", "ebx", "ecx", "edx", "memory");
+	uint32 ret = handler(r);
 	
 	if(31 < r->int_no && r->int_no < 48){
 		if(r->int_no >= 40) outb(PIC2_COMMAND, PIC_EOI);
 		outb(PIC1_COMMAND, PIC_EOI);
 	}
+	
+	return ret;
 }
 
-void registerInterrupt(uint32 id,uint8 flags,uint32 handler){
+void registerInterrupt(uint32 id,uint8 flags,irq_handler_t handler){
 	disable_interrupts();
 	
 	handler_functions[id] = handler;
@@ -650,51 +646,63 @@ void registerInterrupt(uint32 id,uint8 flags,uint32 handler){
 
 
 
-void handle_DIVbyZERO(registers_t *r){
+uint32 handle_DIVbyZERO(registers_t *r){
 	printf("%#40! Division By Zero !");
 	asm volatile("hlt");
+	while(1);
+	return (uint32)r;
 }
-void handle_InvalidOpcode(registers_t *r){
+uint32 handle_InvalidOpcode(registers_t *r){
 	printf("%#40! Invalid Opcode !");
 	asm volatile("hlt");
+	while(1);
+	return (uint32)r;
 }
-void handle_DoubleFault(registers_t *r){
+uint32 handle_DoubleFault(registers_t *r){
 	printf("%#40! Double Fault !");
 	asm volatile("hlt");
+	while(1);
+	return (uint32)r;
 }
-void handle_GeneralProtectionFault(registers_t *r){
+uint32 handle_GeneralProtectionFault(registers_t *r){
 	printf("%#40! General Protection Fault !");
 	asm volatile("hlt");
+	while(1);
+	return (uint32)r;
 }
-void handle_Breakpoint(registers_t *r){
+uint32 handle_Breakpoint(registers_t *r){
 	printf("%#40! Breakpoint !");
 	asm volatile("hlt");
+	while(1);
+	return (uint32)r;
 }
-void handle_PageFault(registers_t *r){
+uint32 handle_PageFault(registers_t *r){
 	printf("%#40! Page Fault !");
 	uint32 addr;
 	asm volatile("mov %%cr2, %0": "=r"(addr));
 	printf("\nAddress: %p",addr);
 	asm volatile("hlt");
+	while(1);
+	return (uint32)r;
 }
 
 
 void install_Basic_Interrupts(){
-	registerInterrupt(0,systemFlags,(uint32)handle_DIVbyZERO);
+	registerInterrupt(0,systemFlags,handle_DIVbyZERO);
 	
 	
-	registerInterrupt(3,systemFlags,(uint32)handle_Breakpoint);
+	registerInterrupt(3,systemFlags,handle_Breakpoint);
 	
 	
-	registerInterrupt(6,systemFlags,(uint32)handle_InvalidOpcode);
+	registerInterrupt(6,systemFlags,handle_InvalidOpcode);
 	
-	registerInterrupt(8,systemFlags,(uint32)handle_DoubleFault);
-	
-	
+	registerInterrupt(8,systemFlags,handle_DoubleFault);
 	
 	
-	registerInterrupt(13,systemFlags,(uint32)handle_GeneralProtectionFault);
-	registerInterrupt(14,systemFlags,(uint32)handle_PageFault);
+	
+	
+	registerInterrupt(13,systemFlags,handle_GeneralProtectionFault);
+	registerInterrupt(14,systemFlags,handle_PageFault);
 }
 
 

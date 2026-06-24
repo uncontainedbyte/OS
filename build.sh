@@ -101,6 +101,8 @@ compile_asm "kernel/isr.asm" &
 compile_c "kernel/util/vector.c" &
 compile_c "kernel/util/linked-list.c" &
 
+compile_c "kernel/PMM.c" &
+compile_c "kernel/processes.c" &
 compile_c "kernel/rtc.c" &
 compile_c "kernel/filesystem.c" &
 compile_c "kernel/pci.c" &
@@ -116,8 +118,23 @@ wait
 link_kernel "main.o" "display.o" "isr.o" \
 			"interrupts.o" "keyboard.o" "PIT.o" \
 			"memory.o" "pci.o" "filesystem.o" \
-			"rtc.o"\
+			"rtc.o" "processes.o" "PMM.o" \
 			\
 			"linked-list.o" "vector.o"
 
 create_floppy
+
+
+
+
+
+FILE="build/kernel.bin"
+LIMIT=$((1024*64))
+FILESIZE=$(stat -c%s "$FILE")
+FILESIZE_KB=$(echo "scale=1; $FILESIZE / 1024" | bc)
+LIMIT_KB=$(echo "scale=1; $LIMIT / 1024" | bc)
+if [ "$FILESIZE" -gt "$LIMIT" ]; then
+	echo -e ".\n.\n.\n.\n.\n.\n.\n.\n.\n."
+	echo "Warning: Kernel size: ${FILESIZE_KB}KB limit: ${LIMIT_KB}KB"
+	echo -e ".\n.\n.\n.\n.\n.\n.\n.\n.\n."
+fi

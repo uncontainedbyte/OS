@@ -5,6 +5,8 @@
 #include "memory.h"
 #include "pci.h"
 #include "filesystem.h"
+#include "processes.h"
+#include "PMM.h"
 
 extern uint32 kernel_start;
 
@@ -22,7 +24,20 @@ void ____testPrint(){
 }
 
 
+uint8 _exe_heapdumb(){
+	heap_dump();
+	return 0;
+}
 
+uint8 _exe_kill(char* arg0){
+	uint32 id = stoi(arg0);
+	
+	printf("Killing: %s\n",arg0);
+	
+	kill_task(id);
+	
+	return 0;
+}
 uint8 _exe_ls(char* arg0){
 	char type = FS_is_dir(arg0);
 	
@@ -280,12 +295,25 @@ void execute(char* buf){
 	}else if(cmpstr(cmd,"ls")){
 		if(arg0==0){ printf("To Few Args\n"); return; }
 		e = _exe_ls(arg0);
+	}else if(cmpstr(cmd,"kill")){
+		if(arg0==0){ printf("To Few Args\n"); return; }
+		e = _exe_kill(arg0);
+	}else if(cmpstr(cmd,"heapdump")){
+		e = _exe_heapdumb();
+	}else if(cmpstr(cmd,"memmap")){
+		MEM_print_memory_map();
+		PMM_print_stats();
+		e = 0;
 	}
 	if(e) printf("EXit-Code: %u\n",e);
 }
 
 
 
+void idle_task(){
+	for(;;)
+		asm volatile("hlt");
+}
 void kmain(){
 	uint32 kernel_end = *((uint32*)0x7FA);
 	kernel_end += ((uint32)(*((uint16*)0x7F8)))*512;
@@ -297,6 +325,7 @@ void kmain(){
 	install_Basic_Interrupts();
 	keyboard_init();
 	PIT_init();
+	PMM_init(kernel_end);
 	MEM_init(kernel_end);
 	
 	sata_init();
@@ -304,18 +333,17 @@ void kmain(){
 	//printf("Kernel-Start: %x4\n",*((uint32*)0x7FA));
 	//printf("Kernel-End:   %x4\n",kernel_end);
 	
-	char cmd_buf[64];
-	int i=0;
-	
 	FILESYSTEM_init();
 	
+	Scheduler_init();
+	start_task((uint32)idle_task);
 	
 	
 	
 	
 	
-	
-	
+	char cmd_buf[64];
+	int i=0;
 	printf(">> ");
 	while(1){
 		uint32 key = keyboard_read();

@@ -24,12 +24,13 @@ typedef enum{
 } IDT_FLAGS;
 #define systemFlags IDT_FLAG_PRESENT | IDT_FLAG_RING0 | IDT_FLAG_GATE_32BIT_INT
 
+typedef uint32 (*irq_handler_t)(registers_t*);
 
 void idt_init();
 void enable_interrupts();
 void disable_interrupts();
 uint8 interrupts_enabled();
-void registerInterrupt(uint32 id,uint8 flags,uint32 handler);
+void registerInterrupt(uint32 id,uint8 flags,irq_handler_t handler);
 void pic_unmask_irq(uint8 irq);
 
 void install_Basic_Interrupts();

@@ -15,6 +15,5 @@ void* kalloc(uint32 count);
 void kfree(void* ptr);
 void* krealloc(void* ptr,uint32 new_size);
 
-void MEM_print_memory_map();
 void MEM_printPageBitmap();
 void heap_dump();

@@ -11,7 +11,7 @@ fi
 
 qemu-system-i386 \
 		-drive file=floppy.img,format=raw \
-		-m 4M \
+		-m 128M \
 		-rtc base=localtime,clock=host\
 		-smp 2 \
 		-cpu core2duo \
