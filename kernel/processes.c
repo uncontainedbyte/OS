@@ -86,7 +86,7 @@ uint32 Scheduler_tick(registers_t* r){
 			if((int32)(now - cleanup->wake_tick) >= 0)
 				LIST_remove(&sleeping,&cleanup->linkedlist_sleeping);
 			LIST_remove(&tasks,(LinkedList_Node*)cleanup);
-			free_pages(cleanup->stack_base,cleanup->stack_pages);
+			kfree((void*)cleanup->stack_base);
 			kfree(cleanup);
 		}
 		
@@ -140,7 +140,7 @@ typedef struct{
 uint32 start_task(uint32 task_start){
 	const static uint32 PAGE_COUNT = 1;
 	
-	uint32 stack_phys = alloc_pages(PAGE_COUNT);
+	uint32 stack_phys = (uint32)kalloc(PAGE_COUNT*4096);
 	uint32 stack_top = stack_phys + 4096;
 	InitialFrame* frame = (InitialFrame*)(stack_top - sizeof(InitialFrame));
 	

@@ -101,6 +101,7 @@ compile_asm "kernel/isr.asm" &
 compile_c "kernel/util/vector.c" &
 compile_c "kernel/util/linked-list.c" &
 
+compile_c "kernel/VMM.c" &
 compile_c "kernel/PMM.c" &
 compile_c "kernel/processes.c" &
 compile_c "kernel/rtc.c" &
@@ -119,6 +120,7 @@ link_kernel "main.o" "display.o" "isr.o" \
 			"interrupts.o" "keyboard.o" "PIT.o" \
 			"memory.o" "pci.o" "filesystem.o" \
 			"rtc.o" "processes.o" "PMM.o" \
+			"VMM.o" \
 			\
 			"linked-list.o" "vector.o"
 

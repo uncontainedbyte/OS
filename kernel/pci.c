@@ -202,22 +202,27 @@ void start_cmd(HBA_PORT* port){
 void ahci_port_init(HBA_PORT* port){
 	stop_cmd(port);
 	
-	ahci_workspace = (void*)alloc_pages(AHCI_WORKSPACE_PAGES);
+	ahci_workspace = (void*)____next_mmio;
+	uint32 p_base = PMM_alloc(AHCI_WORKSPACE_PAGES);
+	for(int s=0;s<AHCI_WORKSPACE_PAGES;s++){
+		VMM_map(____next_mmio,p_base+(s*4096),15);
+		____next_mmio+=4096;
+	}
 	
 	memset(ahci_workspace,0,AHCI_WORKSPACE_PAGES*4096);
 	
-	uint8* base = (uint8*)ahci_workspace;
+	uint8* v_base = (uint8*)ahci_workspace;
 	
-	port->clb  = (uint32)(base);
+	port->clb  = (uint32)(p_base);
 	port->clbu = 0;
-	port->fb   = (uint32)(base + 1024);
+	port->fb   = (uint32)(p_base + 1024);
 	port->fbu  = 0;
 	
-	HBA_CMD_HEADER* headers = (HBA_CMD_HEADER*)base;
+	HBA_CMD_HEADER* headers = (HBA_CMD_HEADER*)v_base;
 	
 	for(int i=0;i<32;i++){
 		headers[i].prdtl = 1;
-		headers[i].ctba = (uint32)(base + 0x1000 + (i * 0x100));
+		headers[i].ctba = (uint32)(p_base + 0x1000 + (i * 0x100));
 		headers[i].ctbau = 0;
 	}
 	
@@ -235,42 +240,6 @@ int find_cmdslot(HBA_PORT* port){
 	
 	return -1;
 }
-void PCI_init(){
-	
-	uint32 AHCI = hunt_AHCI();
-	if(!AHCI){
-		printf("No AHCI\n");
-	}
-	uint32 bar5_low = pci_read32(AHCI&0xFFFF, (AHCI>>16)&0xFF, 0, 0x24);
-	uint32 abar = bar5_low & 0xFFFFFFF0;
-	
-	uint32 virt_adr = alloc_pages(1);
-	map_page(virt_adr,abar,0);
-	
-	HBA_MEM* hba = (HBA_MEM*)virt_adr;
-	g_ahci = hba;
-	
-	for(int i = 0; i < 32; i++){
-		if(!(hba->pi & (1 << i))) continue;
-		
-		HBA_PORT* port = &hba->ports[i];
-		
-		uint32 ssts = port->ssts;
-		
-		uint8 det = ssts & 0x0F;
-		uint8 ipm = (ssts >> 8) & 0x0F;
-		
-		if(det == 3 && ipm == 1){
-			if(port->sig == 0x00000101){
-				sata0.port = port;
-			}
-		}
-		
-	}
-	
-	ahci_port_init(sata0.port);
-	
-}
 
 
 
@@ -282,15 +251,22 @@ int ahci_identify(SATA_DRIVE* drive){
 	
 	if(slot < 0) return 0;
 	
-	HBA_CMD_HEADER* cmdheader = (HBA_CMD_HEADER*)(uint32)port->clb;
+	uint8* workspace_bytes = (uint8*)ahci_workspace;
 	
-	cmdheader += slot;
-	memset(cmdheader,0,sizeof(HBA_CMD_HEADER));
+	//HBA_CMD_HEADER* cmdheader = (HBA_CMD_HEADER*)(uint32)port->clb;
+	HBA_CMD_HEADER* cmdheader = (HBA_CMD_HEADER*)(workspace_bytes + (slot * sizeof(HBA_CMD_HEADER)));
+	
+	//cmdheader += slot;
+	uint32 saved_ctba = cmdheader->ctba;   // save before wipe
+	memset(cmdheader, 0, sizeof(HBA_CMD_HEADER));
+	cmdheader->ctba  = saved_ctba;         // restore after
+	cmdheader->ctbau = 0;
 	cmdheader->cfl = sizeof(FIS_REG_H2D)/sizeof(uint32);
 	cmdheader->w = 0;
 	cmdheader->prdtl = 1;
 	
-	HBA_CMD_TBL* cmdtbl = (HBA_CMD_TBL*)(uint32)cmdheader->ctba;
+	//HBA_CMD_TBL* cmdtbl = (HBA_CMD_TBL*)(uint32)cmdheader->ctba;
+	HBA_CMD_TBL* cmdtbl = (HBA_CMD_TBL*)(workspace_bytes + 0x1000 + (slot * 0x100));
 	
 	memset(cmdtbl,0,256);
 	
@@ -307,8 +283,12 @@ int ahci_identify(SATA_DRIVE* drive){
 	port->is = 0xFFFFFFFF;
 	port->ci |= (1u << slot);
 	
-	while(port->ci & (1u << slot)){}
-	
+	int timeout = 1000000;
+	while((port->ci & (1u << slot)) && --timeout){}
+	if(timeout == 0){
+		printf("AHCI timeout: tfd=%x is=%x serr=%x\n",port->tfd, port->is, port->serr);
+		return 0;
+	}
 	if(port->is & (1u << 30)) return 0;
 	
 	uint64 sectors =
@@ -334,12 +314,13 @@ int sata_init(){
 	uint8 bus  = ahci & 0xFF;
 	uint8 slot = (ahci >> 16) & 0xFF;
 	uint32 abar = pci_read32(bus,slot,0,0x24) & 0xFFFFFFF0;
-	uint32 virt = alloc_pages(2);
 	
-	map_page(virt,abar,0);
-	map_page(virt+4096,abar+4096,0);
 	
-	g_ahci = (HBA_MEM*)virt;
+	VMM_map(____next_mmio,abar,15);
+	VMM_map(____next_mmio+4096,abar+4096,15);
+	g_ahci = (HBA_MEM*)____next_mmio;
+	____next_mmio+=4096*2;
+	
 	g_ahci->ghc |= (1u << 31);
 	sata0.port = 0;
 	
@@ -376,51 +357,55 @@ int sata_init(){
 }
 #define ATA_CMD_READ_DMA_EXT   0x25
 #define ATA_CMD_WRITE_DMA_EXT  0x35
-int ahci_rw(HBA_PORT* port,uint64 lba,uint32 count,const void* buffer,int write){
+int ahci_rw(HBA_PORT* port, uint64 lba, uint32 count, const void* buffer, int write) {
 	int slot = find_cmdslot(port);
-	if(slot < 0) return 0;
+	if (slot < 0) return 0;
 	
-	HBA_CMD_HEADER* cmdheader = (HBA_CMD_HEADER*)(uint32)port->clb;
+	uint8* workspace_bytes = (uint8*)ahci_workspace;
 	
-	cmdheader += slot;
-	
-	memset(cmdheader,0,sizeof(HBA_CMD_HEADER));
-	
-	cmdheader->cfl = sizeof(FIS_REG_H2D)/4;
-	cmdheader->w = write ? 1 : 0;
+	HBA_CMD_HEADER* cmdheader = (HBA_CMD_HEADER*)workspace_bytes + slot;
+	uint32 saved_ctba = cmdheader->ctba;
+	memset(cmdheader, 0, sizeof(HBA_CMD_HEADER));
+	cmdheader->ctba  = saved_ctba;
+	cmdheader->ctbau = 0;
+	cmdheader->cfl   = sizeof(FIS_REG_H2D) / 4;
+	cmdheader->w     = write ? 1 : 0;
 	cmdheader->prdtl = 1;
 	
-	HBA_CMD_TBL* cmdtbl = (HBA_CMD_TBL*)(uint32)cmdheader->ctba;
+	HBA_CMD_TBL* cmdtbl = (HBA_CMD_TBL*)(workspace_bytes + 0x1000 + (slot * 0x100));
+	memset(cmdtbl, 0, 256);
 	
-	memset(cmdtbl,0,256);
-	
-	cmdtbl->prdt_entry[0].dba = (uint32)buffer;
+	cmdtbl->prdt_entry[0].dba  = VMM_get_phys_address((uint32)buffer);
 	cmdtbl->prdt_entry[0].dbau = 0;
-	cmdtbl->prdt_entry[0].dbc = (count * 512) - 1;
-	cmdtbl->prdt_entry[0].i = 1;
+	cmdtbl->prdt_entry[0].dbc  = (count * 512) - 1;
+	cmdtbl->prdt_entry[0].i    = 1;
 	
 	FIS_REG_H2D* fis = (FIS_REG_H2D*)cmdtbl->cfis;
-	
 	fis->fis_type = FIS_TYPE_REG_H2D;
-	fis->c = 1;
-	fis->command = (write)? ATA_CMD_WRITE_DMA_EXT : ATA_CMD_READ_DMA_EXT;
+	fis->c        = 1;
+	fis->command  = write ? ATA_CMD_WRITE_DMA_EXT : ATA_CMD_READ_DMA_EXT;
+	fis->lba0     = (uint8)(lba);
+	fis->lba1     = (uint8)(lba >> 8);
+	fis->lba2     = (uint8)(lba >> 16);
+	fis->lba3     = (uint8)(lba >> 24);
+	fis->lba4     = (uint8)(lba >> 32);
+	fis->lba5     = (uint8)(lba >> 40);
+	fis->device   = 1 << 6;
+	fis->countl   = count & 0xFF;
+	fis->counth   = count >> 8;
 	
-	fis->lba0 = (uint8)(lba);
-	fis->lba1 = (uint8)(lba >> 8);
-	fis->lba2 = (uint8)(lba >> 16);
-	fis->lba3 = (uint8)(lba >> 24);
-	fis->lba4 = (uint8)(lba >> 32);
-	fis->lba5 = (uint8)(lba >> 40);
-	fis->device = 1 << 6;
-	fis->countl = count & 0xFF;
-	fis->counth = count >> 8;
 	port->is = 0xFFFFFFFF;
+	__asm__ volatile("" ::: "memory");
 	port->ci |= (1u << slot);
 	
-	while(port->ci & (1u << slot)){}
+	int timeout = 1000000;
+	while ((port->ci & (1u << slot)) && --timeout) {}
+	if (timeout == 0) {
+		printf("ahci_rw timeout: tfd=%x is=%x serr=%x\n", port->tfd, port->is, port->serr);
+		return 0;
+	}
 	
-	if(port->is & (1u << 30)) return 0;
-	
+	if (port->is & (1u << 30)) return 0;
 	return 1;
 }
 int sata_read(uint64 lba,uint32 count,void* buffer){
@@ -449,7 +434,47 @@ int sata_write(uint64 lba,uint32 count,const void* buffer){
 
 
 
+/*
 
+void PCI_init(){
+	
+	uint32 AHCI = hunt_AHCI();
+	if(!AHCI){
+		printf("No AHCI\n");
+	}
+	uint32 bar5_low = pci_read32(AHCI&0xFFFF, (AHCI>>16)&0xFF, 0, 0x24);
+	uint32 abar = bar5_low & 0xFFFFFFF0;
+	
+	VMM_map(____next_mmio,abar,15);
+	
+	HBA_MEM* hba = (HBA_MEM*)____next_mmio;
+	____next_mmio+=4096;
+	
+	g_ahci = hba;
+	
+	for(int i = 0; i < 32; i++){
+		if(!(hba->pi & (1 << i))) continue;
+		
+		HBA_PORT* port = &hba->ports[i];
+		
+		uint32 ssts = port->ssts;
+		
+		uint8 det = ssts & 0x0F;
+		uint8 ipm = (ssts >> 8) & 0x0F;
+		
+		if(det == 3 && ipm == 1){
+			if(port->sig == 0x00000101){
+				sata0.port = port;
+			}
+		}
+		
+	}
+	
+	//ahci_port_init(sata0.port);
+	
+}
+
+*/
 
 
 

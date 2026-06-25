@@ -7,6 +7,7 @@
 #include "filesystem.h"
 #include "processes.h"
 #include "PMM.h"
+#include "VMM.h"
 
 extern uint32 kernel_start;
 
@@ -326,7 +327,9 @@ void kmain(){
 	keyboard_init();
 	PIT_init();
 	PMM_init(kernel_end);
-	MEM_init(kernel_end);
+	VMM_init();
+	MEM_init();
+	printf("good?\n");
 	
 	sata_init();
 	
@@ -337,7 +340,6 @@ void kmain(){
 	
 	Scheduler_init();
 	start_task((uint32)idle_task);
-	
 	
 	
 	

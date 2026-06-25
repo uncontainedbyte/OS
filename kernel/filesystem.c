@@ -948,7 +948,7 @@ uint8 FS_dir_get(const char* path,uint32 index,char* name){
 
 
 void FILESYSTEM_init(){
-	uint8* buffer = (uint8*)alloc_pages(1); // superblock
+	uint8* buffer = (uint8*)kalloc(4096); // superblock
 	
 	uint8 found = 0;
 	for(int s=0;s<256;s++){
@@ -961,7 +961,7 @@ void FILESYSTEM_init(){
 		}
 	}
 	if(!found){
-		free_pages((uint32)buffer,1);
+		kfree(buffer);
 		printf("no file system found\n");
 		printf("halting");
 		asm volatile("hlt");
@@ -970,7 +970,7 @@ void FILESYSTEM_init(){
 	
 	BlockCount = super->total_blocks;
 	
-	buffer = (uint8*)alloc_pages(super->bitmap_block_count); // filesystem_bitmap
+	buffer = (uint8*)kalloc(super->bitmap_block_count*4096); // filesystem_bitmap
 	for(int s=0;s<super->bitmap_block_count;s++){
 		read_block(s+convert_uint48(super->bitmap_start_block),buffer+(s*4096));
 	}
