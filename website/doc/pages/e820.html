@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>My-OS's-Website</title>
+	<link rel="stylesheet" href="../../main.css">
+</head>
+<body>
+	
+	<a href = "/index.html">home</a>
+	<a href="javascript:history.back()">Back</a>
+	
+	<h1>e820</h1>
+	
+	<table>
+		<tr> <th>0x800</th> <th>entry_t</th> <th>start of array of entrys</th> </tr>
+		<tr> <th>0x7FE</th> <th>uint16</th>  <th>size of array of entrys</th> </tr>
+	</table>
+	
+	<table>
+		<tr> <th>entry_t</th>    <th>24B</th>    <th>packed</th> </tr>
+		<tr> <th>base</th>       <th>uint64</th> <th>base address of ram section</th> </tr>
+		<tr> <th>length</th>     <th>uint64</th> <th>size of ram section</th> </tr>
+		<tr> <th>type</th>       <th>uint32</th> <th>type of ram section</th> </tr>
+		<tr> <th>attributes</th> <th>uint32</th> <th>no idea what this is for</th> </tr>
+	</table>
+	
+	<table>
+		<tr> <th>entry_t->type</th> </tr>
+		<tr> <th>1</th>  <th>Free</th> </tr>
+		<tr> <th>2</th>  <th>Reserved</th> </tr>
+		<tr> <th>3+</th> <th>Unknown</th> </tr>
+	</table>
+	
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

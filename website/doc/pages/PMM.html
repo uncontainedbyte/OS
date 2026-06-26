@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>My-OS's-Website</title>
+	<link rel="stylesheet" href="../../main.css">
+</head>
+<body>
+	
+	<a href = "/index.html">home</a>
+	<a href="javascript:history.back()">Back</a>
+	
+	<div style="display: flex; align-items: baseline; gap: 10px;">
+		<h1>PMM</h1>
+		<h4>(Physical-Memory-Manager)</h4>
+	</div>
+	
+	the PMM on init first checks all e820 entrys to find the highest address of usable memory
+	
+	it uses that to calculate the total number of pages
+	{ALIGN_UP(highest,PAGE_SIZE)/PAGE_SIZE}
+	
+	it calculates the number of bytes the bitmap needs to store each page as a bit
+	{ALIGN_UP(PAGE_COUNT,8)/8}
+	
+	it uses the kernel end address as the start of the bitmap memory,
+	and gets the end of bitmap memory by adding the page count of the bitmap to kernel end
+	
+	it clears the bitmaps memory to be all reserved (NOT FREE!)
+	
+	it then loops through all e820 entrys to set the "usable" sections to free in the bitmap
+	
+	it finally loops through all pages from address 0 to the end of the bitmap to USED since thats where kernel code and the bitmap is
+	
+	
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
