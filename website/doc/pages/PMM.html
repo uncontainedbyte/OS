@@ -8,30 +8,56 @@
 	
 	<a href = "/index.html">home</a>
 	<a href="javascript:history.back()">Back</a>
+	<br><br>
+	<a href="../source-view.html?file=kernel/PMM.h">source.h</a>
+	<a href="../source-view.html?file=kernel/PMM.c">source.c</a>
 	
 	<div style="display: flex; align-items: baseline; gap: 10px;">
 		<h1>PMM</h1>
 		<h4>(Physical-Memory-Manager)</h4>
 	</div>
 	
-	the PMM on init first checks all e820 entrys to find the highest address of usable memory
-	
-	it uses that to calculate the total number of pages
-	{ALIGN_UP(highest,PAGE_SIZE)/PAGE_SIZE}
-	
-	it calculates the number of bytes the bitmap needs to store each page as a bit
-	{ALIGN_UP(PAGE_COUNT,8)/8}
-	
-	it uses the kernel end address as the start of the bitmap memory,
-	and gets the end of bitmap memory by adding the page count of the bitmap to kernel end
-	
-	it clears the bitmaps memory to be all reserved (NOT FREE!)
-	
-	it then loops through all e820 entrys to set the "usable" sections to free in the bitmap
-	
-	it finally loops through all pages from address 0 to the end of the bitmap to USED since thats where kernel code and the bitmap is
-	
-	
+	<h2 id="PMM_init">PMM_init</h2>
+	<p>
+		the PMM on init first checks all <a href = "./e820.html">e820</a> entrys to find the highest address of usable memory,<br>
+		it uses that to calculate the total number of pages.<br>
+		<br>
+		it calculates the number of bytes the bitmap needs to store each page as a bit.<br>
+		<br>
+		it uses the kernel end address as the start of the bitmap memory, 
+		and gets the end of bitmap memory by adding the page count of the bitmap to kernel end<br>
+		<br>
+		it clears the bitmaps memory to be all reserved (NOT FREE!)<br>
+		<br>
+		it then loops through all <a href = "./e820.html">e820</a> entrys to set the "usable" sections to free in the bitmap<br>
+		<br>
+		it finally loops through all pages from address 0 to the end of the bitmap to USED since thats where kernel code and the bitmap is
+	</p>
+	<hr>
+	<h2 id="PMM_alloc">PMM_alloc</h2>
+	<p>
+		loops through the bitmap to find a section of free pages that is equal to what was requested.<br>
+		<br>
+		returns the base address of the section if found,<br>
+		otherwise returns zero<br>
+		<br>
+		<strong>Note</strong>: returns physical address, not page index.
+	</p>
+	<hr>
+	<h2 id="PMM_free">PMM_free</h2>
+	<p>
+		takes a physical page address and number of pages,<br>
+		loops through the bitmap setting the sections pages to FREE.
+	</p>
+	<hr>
+	<h2>Small helpers</h2>
+	<p>
+		<b>bitmap_set</b>: takes page index and sets it to USED.<br>
+		<br>
+		<b>bitmap_clear</b>: takes page index and sets it to FREE.<br>
+		<br>
+		<b>bitmap_test</b>: takes page index, returns true if USED, false if FREE.
+	</p>
 </body>
 </html>
 

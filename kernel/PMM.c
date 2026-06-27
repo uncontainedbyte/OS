@@ -18,9 +18,6 @@ const char* e820_type_name(uint32 type){
 	switch(type){
 		case 1: return "Usable    ";
 		case 2: return "Reserved  ";
-		case 3: return "ACPI claim";
-		case 4: return "ACPI NVS  ";
-		case 5: return "Bad Memory";
 		default: return "Unknown   ";
 	}
 }

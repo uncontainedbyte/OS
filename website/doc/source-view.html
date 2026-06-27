@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+
+
+<!--####################
+##                    ##
+##     MADE BY AI     ##
+##                    ##
+##   ill remake this  ##
+##    myself in the   ##
+##       future       ##
+#####################-->
+
+
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>Source Viewer</title>
+	
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css">
+	<link rel="stylesheet" href="/main.css">
+	
+	<style>
+		#viewer {
+			display: flex;
+			overflow: auto;
+			background: #0d1117;
+			border-radius: 8px;
+			margin: 20px;
+		}
+		
+		#lines {
+			margin: 0;
+			padding: 20px 10px;
+			text-align: right;
+			color: #777;
+			user-select: none;      /* Can't select line numbers */
+			border-right: 1px solid #333;
+		}
+		
+		#code {
+			margin: 0;
+			padding: 0;
+			flex: 1;
+		}
+	</style>
+	
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/c.min.js"></script>
+</head>
+<body>
+	
+	<header>
+		<h1>Source Viewer</h1>
+		<a href = "/index.html">home</a>
+		<a href="javascript:history.back()">Back</a>
+	</header>
+	
+	<div style="display: flex;">
+		<div id="filename"></div>
+		<span class="right"><a id="github" target="_blank">View on GitHub</a></span>
+	</div>
+	
+<!--
+	<pre><code id="code" class="language-c"></code></pre>
+-->
+	<div style="display: flex; align-items: baseline; gap: 10px;" id="viewer">
+		<pre id="lines"></pre>
+		<pre><code id="code" class="language-c"></code></pre>
+	</div>
+	<script>
+	
+	const owner="uncontainedbyte";
+	const repo="OS";
+	const branch="main";
+	
+	const params=new URLSearchParams(window.location.search);
+	const file=params.get("file");
+	
+	if(!file){
+		document.getElementById("filename").innerText="No file specified.";
+		throw new Error("No file");
+	}
+	
+	document.getElementById("filename").innerText=file;
+	
+	document.getElementById("github").href=`https://github.com/${owner}/${repo}/blob/${branch}/${file}`;
+	
+	fetch(`https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${file}`)
+	.then(response=>{
+		if(!response.ok)
+			throw new Error("Failed to load file");
+		return response.text();
+	})
+	.then(text=>{
+		text = text.replace(/(\r?\n)+$/, "");
+		text = text.replace(/\t/g, "    ");
+		
+		const lines = text.split(/\r?\n/);
+		
+		document.getElementById("lines").textContent = lines.map((_, i) => i + 1).join("\n");
+		
+		document.getElementById("code").textContent = text;
+		
+		hljs.highlightElement(document.getElementById("code"));
+	})
+	.catch(err=>{
+		document.getElementById("code").textContent=err.message;
+	});
+	
+	</script>
+	
+</body>
+</html>

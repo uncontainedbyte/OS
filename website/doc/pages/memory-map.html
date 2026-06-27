@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>My-OS's-Website</title>
+	<link rel="stylesheet" href="../../main.css">
+</head>
+<body>
+	
+	<a href = "/index.html">home</a>
+	<a href="javascript:history.back()">Back</a>
+	<br><br>
+	<h1>Memory Map</h1>
+	
+	
+	<table>
+		<tr> <th>Start</th> <th>End</th> <th>Purpose</th> </tr>
+		<tr> <th>0x0000</th> <th>0x1FF</th> <th>Bootloader</th> </tr>
+		<tr> <th>0x0200</th> <th>0x07F7</th> <th>FREE</th> </tr>
+		<tr> <th>0x07F8</th> <th>0x07F9</th> <th>Kernel Sector Count Variable</th> </tr>
+		<tr> <th>0x07FA</th> <th>0x07FD</th> <th>Kernel Start Address Variable</th> </tr>
+		<tr> <th>0x07FE</th> <th>0x07FF</th> <th>e820 Entry Count</th> </tr>
+		<tr> <th>0x0800</th> <th>0x0FFF</th> <th>e820 Entries</th> </tr>
+		<tr> <th>0x1000</th> <th>0x37FF</th> <th>Stage2 Bootloader</th> </tr>
+		<tr> <th>0x3800</th> <th>0xFFFF</th> <th>FREE</th> </tr>
+		<tr> <th>0x10000</th> <th>0x1FFFF</th> <th>Kernel</th> </tr>
+		<tr> <th>...</th> <th>0x90000</th> <th>Stack</th> </tr>
+	</table>
+	
+	
+	
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+

@@ -4,7 +4,7 @@
 
 
 
-_start:
+_start:;{
 	mov [BOOT_DRIVE], dl ; the drive id that was booted from
 	
 	mov bp, 0x9000
@@ -28,7 +28,7 @@ _start:
 	mov al,[BOOT_DRIVE]
 	
 	jmp 0x0000:STAGE2_OFFSET
-
+;}
 
 load_stage2:;{
 	mov bx, STAGE2_OFFSET

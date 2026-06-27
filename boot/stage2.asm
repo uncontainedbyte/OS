@@ -20,9 +20,9 @@ _start:;{
 	mov si,ld_switch_msg
 	call print_string
 	
-	call scan_hardware
-	
 	cli; Disable interrupts
+	
+	call scan_hardware
 	
 	lgdt [GDT_POINTER]; Load the GDT
 	
@@ -30,6 +30,8 @@ _start:;{
 	mov eax, cr0
 	or eax, 1
 	mov cr0, eax
+	
+	sti; Enable interrupts
 	
 	jmp CODE_SEG:mode32b_start; Far jump
 	;jmp $
@@ -105,7 +107,7 @@ scan_ram:;{
 
 
 
-load_kernel:
+load_kernel:;{
 	mov si, DAP
 	; destination memory
 	mov word [DAP + 4], 0x0000
@@ -132,14 +134,9 @@ load_kernel:
 	mov si, loading_error_msg
 	call print_string
 	jmp $
-.partal_load_error:
-	mov si, partal_loading_error_msg
-	call print_string
-	jmp $
 ;}
 ; Data for the error message
 loading_error_msg db "Error: Failed to load kernel!", 10, 13, 0
-partal_loading_error_msg db "Error: Failed to load entire kernel!", 10, 13, 0
 
 
 spacer_msg db "----------------------------------------------------",10,13, 0
