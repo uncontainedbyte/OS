@@ -10,15 +10,6 @@ uint32 current_cr3;
 void load_page_directory(uint32 dir){
 	asm volatile("mov %0, %%cr3":: "r"(dir));
 }
-void enable_paging(){
-	uint32 cr0;
-	
-	asm volatile("mov %%cr0, %0": "=r"(cr0));
-	
-	cr0 |= 0x80000000;
-	
-	asm volatile("mov %0, %%cr0":: "r"(cr0));
-}
 void VMM_init(){
 	current_cr3 = PMM_alloc(1);
 	memset((uint8*)current_cr3,0,4096);
@@ -34,7 +25,13 @@ void VMM_init(){
 	((uint32*)current_cr3)[1023] = current_cr3 | 0x3;
 	
 	load_page_directory(current_cr3);
-	enable_paging();
+	
+	// enable paging
+	
+	uint32 cr0;
+	asm volatile("mov %%cr0, %0": "=r"(cr0));
+	cr0 |= 0x80000000;
+	asm volatile("mov %0, %%cr0":: "r"(cr0));
 }
 
 int VMM_map(uint32 virt,uint32 phys,uint32 flags){

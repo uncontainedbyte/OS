@@ -3,6 +3,7 @@
 <head>
 	<title>My-OS's-Website</title>
 	<link rel="stylesheet" href="../../main.css">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
 	
@@ -24,6 +25,14 @@
 		<tr> <th>0x3800</th> <th>0xFFFF</th> <th>FREE</th> </tr>
 		<tr> <th>0x10000</th> <th>0x1FFFF</th> <th>Kernel</th> </tr>
 		<tr> <th>...</th> <th>0x90000</th> <th>Stack</th> </tr>
+		<tr> <th>0x01000000</th> <th>0x08000000</th> <th>Heap</th> </tr>
+		<tr> <th>0x08000000</th> <th>...</th> <th>Memory Mapped IO</th> </tr>
+		<tr> <th>0xFFC00000</th> <th>0xFFFFEFFF</th> <th>1023 Page Tables</th> </tr>
+		<tr> <th>0xFFFFF000</th> <th>0xFFFFFFFF</th> <th>Page Directory</th> </tr>
+		<tr> <th>0x3FC000</th> <th>0x3FCFFF</th> <th>Temp Page 3</th> </tr>
+		<tr> <th>0x3FD000</th> <th>0x3FDFFF</th> <th>Temp Page 2</th> </tr>
+		<tr> <th>0x3FE000</th> <th>0x3FEFFF</th> <th>Temp Page 1</th> </tr>
+		<tr> <th>0x3FF000</th> <th>0x3FFFFF</th> <th>Temp Page 0</th> </tr>
 	</table>
 	
 	

@@ -3,6 +3,7 @@
 <head>
 	<title>My-OS's-Website</title>
 	<link rel="stylesheet" href="../../main.css">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
 	
@@ -16,57 +17,57 @@
 	<h1>Bootloader</h1>
 	
 	
-	<h2>_start</h2>
+	<h2 id="_start">_start</h2>
 	<p>
-		saves the drive ID it was booted from into variable BOOT_DRIVE, 
+		saves the drive ID it was booted from into variable <strong>BOOT_DRIVE</strong>, 
 		sets the stack to 0x9000<br>
-		and sets ES &amp; DS to 0 so that memory operations act from 0x0000 as the base address.<br><br>
-		calls load_stage2 to load stage 2 of the bootloader...<br><br>
-		moves BOOT_DRIVE into ax so stage2 can read ax to get the drive ID, 
-		then jumps to stage2 code and starts executing it.
+		and sets <strong>ES</strong> &amp; <strong>DS</strong> to 0 so that memory operations act from 0x0000 as the base address.<br><br>
+		calls <a href="#load_stage2">load_stage2</a> to load <a href="#stage2">stage2</a> of the bootloader...<br><br>
+		moves <strong>BOOT_DRIVE</strong> into <strong>AX</strong> so <a href="#stage2">stage2</a> can read <strong>AX</strong> to get the drive ID, 
+		then jumps to <a href="#stage2">stage2</a> code and starts executing it.
 	</p>
 	
 	<hr>
 	
-	<h2>load_stage2</h2>
+	<h2 id="load_stage2">load_stage2</h2>
 	<p>
-		sets BX to the memory address of where to load stage2,<br>
+		sets <strong>BX</strong> to the memory address of where to load <a href="#stage2">stage2</a>,<br>
 		puts the number of sectors to read on the stack for error checks later.<br><br>
-		sets up registers to call BIOS 0x13 to load stage 2 into memory, 
-		then calls BIOS.<br><br>
-		checks the carry flag to see if the BIOS called failed,
-		if so, prints an error message and halts.<br><br>
-		compares the number on the stack with AL, if they are not equal,
-		then there was an error, prints an error message and halts.<br><br>
+		sets up registers to call <strong>BIOS</strong> 0x13 to load <a href="#stage2">stage2</a> into memory, 
+		then calls <strong>BIOS</strong>.<br><br>
+		checks the carry flag to see if the <strong>BIOS</strong> called failed,
+		if so, <a href="#print_string">print</a>s an error message and halts.<br><br>
+		compares the number on the stack with <strong>AL</strong>, if they are not equal,
+		then there was an error, <a href="#print_string">print</a>s an error message and halts.<br><br>
 		returns if no checks failed.
 	</p>
 	
 	<hr>
 	
-	<h2>Small helpers</h2>
+	<h2 id="small-helpers">Small helpers</h2>
 	<p>
-		<b>print_string</b>: uses BIOS calls to print a string.
+		<b id="print_string">print_string</b>: uses <strong>BIOS</strong> calls to print a string.
 	</p>
 	<hr>
 	
-	<h1>Bootloader-Stage2</h1>
-	<h2>_start</h2>
+	<h1 id="stage2">Bootloader-Stage2</h1>
+	<h2 id="stage2._start">_start</h2>
 	<p>
-		saves the drive ID AX into variable BOOT_DRIVE<br><br>
-		calls load_kernel to load... kernel...<br><br>
-		writes kernel start address into memory at 0x07FA as 4Bytes<br>
-		writes the sector count of the kernel to memory at 0x07FE as 2Bytes<br><br>
+		saves the drive ID <strong>AX</strong> into variable <strong>BOOT_DRIVE</strong><br><br>
+		calls <a href="#load_kernel">load_kernel</a> to load... kernel...<br><br>
+		writes kernel start address into memory at <a href = "./memory-map.html">0x07FA</a> as 4Bytes<br>
+		writes the sector count of the kernel to memory at <a href = "./memory-map.html">0x07F8</a> as 2Bytes<br><br>
 		disables interrupts,<br>
-		calls scan_hardware,<br>
-		loads the GDT,<br>
-		and sets the protected mode bit in CR0.<br><br>
+		calls <a href="#scan_hardware">scan_hardware</a>,<br>
+		loads the <a href="#GDT">GDT</a>,<br>
+		and sets the protected mode bit in <strong>CR0</strong>.<br><br>
 		its now in 32bit mode.<br><br>
-		far jumps to mode32b_start.
+		far jumps to <a href="#mode32b_start">mode32b_start</a>.
 	</p>
 	
 	<hr>
 	
-	<h2>load_kernel</h2>
+	<h2 id="load_kernel">load_kernel</h2>
 	<p>
 		<h3>DAP</h3>
 		<table>
@@ -74,69 +75,69 @@
 			<tr> <th>1B</th> <th>1B</th> <th>2B</th> <th>2B</th> <th>2B</th> <th>8B</th> </tr>
 		</table>
 		
-		sets SI to DAP's address.<br><br>
+		sets <strong>SI</strong> to DAP's address.<br><br>
 		loads the address of where to load the kernel into DAP.offset and DAP.segment,<br>
 		loads the LBA address of where the kernel is on disk into DAP.LBA.<br><br>
-		sets CX to the number of sectors to load.<br><br>
-		calls BIOS to do an "extended read" which loads the kernel into memory, 
-		checks carry flag, if set, prints an error message and halts.<br><br>
+		sets <strong>CX</strong> to the number of sectors to load.<br><br>
+		calls <strong>BIOS</strong> to do an "extended read" which loads the kernel into memory, 
+		checks carry flag, if set, <a href="#stage2.print_string">print</a>s an error message and halts.<br><br>
 		adds 512 to DAP.offset, 
 		if carry flag set, adds 0x1000 to DAP.segment.<br><br>
-		decerments CX by 1 and if not zero, else loops back to read more sectors.<br><br>
-		returns back to _start
+		decerments <strong>CX</strong> by 1 and if not zero, else loops back to read more sectors.<br><br>
+		returns back to <a href="#stage2._start">_start</a>
 		
 	</p>
 	
 	<hr>
 	
-	<h2>scan_hardware</h2>
+	<h2 id="scan_hardware">scan_hardware</h2>
 	<p>
-		calls scan_ram
+		calls <a href = "#scan_ram">scan_ram</a>
 	</p>
 	
 	<hr>
 	
-	<h2>scan_ram</h2>
+	<h2 id="scan_ram">scan_ram</h2>
 	<p>
-		sets DX to the start of e820's entry buffer,<br>
-		and clears e820's entry count.<br><br>
-		calls BIOS to get system memory map entry.<br><br>
-		checks if EAX equals "SMAP" aka 0x534D4150, if not equal, return,<br>
+		sets <strong>DX</strong> to the start of <a href = "./e820.html">e820</a>'s entry buffer,<br>
+		and clears <a href = "./e820.html">e820</a>'s entry count.<br><br>
+		calls <strong>BIOS</strong> to get system memory map entry.<br><br>
+		checks if <strong>EAX</strong> equals "SMAP" aka 0x534D4150, if not equal, return,<br>
 		checks if carry set, if so, return,<br>
-		if EBX zero, then return.<br><br>
-		incerment e820's entry count by 1,<br>
-		add 24 to DX as not to overwrite the previous e820 entry.<br><br>
+		if <strong>EBX</strong> zero, then return.<br><br>
+		incerment <a href = "./e820.html">e820</a>'s entry count by 1,<br>
+		add 24 to <strong>DX</strong> as not to overwrite the previous <a href = "./e820.html">e820</a> entry.<br><br>
 		jumps back to read the next entry.
 	</p>
 	
 	<hr>
 	
-	<h2>GDT</h2>
+	<h2 id="GDT">GDT</h2>
 	<p>
 		i dont remember how it works
 	</p>
 	
 	<hr>
 	
-	<h2>mode32b_start</h2>
+	<h2 id="mode32b_start">mode32b_start</h2>
 	<p>
 		clears all registers with a 32 bit value to reset the CPU cache.<br><br>
-		sets stack to 0x90000.<br><br>
-		cld is vary much so required.<br><br>
+		sets stack to <a href = "./memory-map.html">0x90000</a>.<br><br>
+		<strong>cld</strong> is vary much so required.<br><br>
 		calls the kernel code.<br><br>
 		halts if the kernel ever returns.
 	</p>
 	
 	<hr>
 	
-	<h2>Small helpers</h2>
+	<h2 id="stage2.small-helpers">Small helpers</h2>
 	<p>
-		<b>print_string</b>: uses BIOS calls to print a string.
+		<b id="stage2.print_string">print_string</b>: uses <strong>BIOS</strong> calls to print a string.
 	</p>
 	
 	<hr>
 	
-	<h1>Kernel-Entry</h1>
+	<h1 id="Kernel-Entry">Kernel-Entry</h1>
 	<p>
 		used to allow the linker to connect the bootloader and kernel
 	</p>

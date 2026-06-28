@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>My-OS's-Website</title>
+	<link rel="stylesheet" href="../../main.css">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+	
+	<a href = "/index.html">home</a>
+	<a href="javascript:history.back()">Back</a>
+	<br><br>
+	<a href="../source-view.html?file=kernel/VMM.h">source.h</a>
+	<a href="../source-view.html?file=kernel/VMM.c">source.c</a>
+	
+	<div style="display: flex; align-items: baseline; gap: 10px;">
+		<h1>VMM</h1>
+		<h4>(Virtual-Memory-Manager)</h4>
+	</div>
+	
+	<h2>VMM_init</h2>
+	<p>
+		allocates a physical page to be used as the first page directory and clears it with 0's.
+		allocates a physical page for the first page table and clears it.
+		maps the first 1024 pages(4MB) to equal physical addresses, my kernel sits within this.
+		sets index 0 in the page directory to the address of the page table, and sets the 1023 index to be itself, i forgot why this was usefull...
+		loads the directory into register CR0 using load_page_directory.
+		enables paging by setting the highest bit in CR0.
+	</p>
+	
+	<hr>
+	
+	<h2>VMM_map</h2>
+	<p>
+		takes in a physical address and a virtual address to map it to.
+		gets the page directory and the page table the virtual address maps in,
+		checks if the page directory has no page tables allocated, if so,
+		allocates a physical page, maps it in the page directory, clears it, and refreshes CR0.
+		adds the physcical to virtual mapping to the page table and does invlpg(i dont know what it does, but its needed)
+		a return value of 0 is success, 1 is error.
+	</p>
+	
+	<hr>
+	
+	<h2>VMM_unmap</h2>
+	<p>
+		takes in a virtual address,
+		gets the page directory and the page table the virtual address maps in,
+		and checks if its actually mapped, if not, returns.
+		clears its entry in the page table, invokes invlpg.
+		scans the entire page table to see if its empty,
+		then frees the page tables physically allocated page,
+		clears the page directory entry where the page table was,
+		and refreshes CR0.
+	</p>
+	
+	<hr>
+	
+	<h2>VMM_get_phys_address</h2>
+	<p>
+		takes in a virtual address,
+		gets the page directory and the page table the virtual address maps in.
+		checks the page directory to see if it has the page table needed, if not, returns 0.
+		checks the page table to see if the mapping is there, if not, returns 0.
+		returns the physical address in the page table that the virtual address maps to.
+	</p>
+	
+	<hr>
+	
+	<h2>VMM_create_directory</h2>
+	<p>
+		creates a new address space,
+		and allocates a page for the page directory for the new address space.
+		tempararaly maps the allocated page directory to a virtual address temp0 using VMM_temp_map_0.
+		clears the page with zeros,
+		and sets the first page directory entry to the currently running page directory entry 0.
+		sets entry 1023 to itself.
+		unmaps virtual address temp0 using VMM_temp_unmap_0, and returns the new address space.
+	</p>
+	
+	<hr>
+	
+	<h2>VMM_switch_directory</h2>
+	<p>
+		swaps current address space for another address space.
+	</p>
+	
+	<hr>
+	
+	<h2>VMM_destroy_directory</h2>
+	<p>
+		maps address space page directory to temp0 using VMM_temp_map_0.
+		runs through all entrys except the first and last, freeing them if the present bit is set.
+		unmaps virtual address temp0 using VMM_temp_unmap_0, and frees the page directorys physical address.
+	</p>
+	
+	<hr>
+	
+	<h2>VMM_map_in_directory</h2>
+	<p>
+		takes in a physical address and a virtual address to map it to in passed address space.
+		maps address space page directory to temp0 using VMM_temp_map_0.
+		gets the page directory and the page table the virtual address maps in,
+		checks if the page directory has no page tables allocated, if so,
+		allocates a physical page, maps it in the page directory, 
+		temp maps the table, clears it, and umaps the table.
+		
+		temp maps the table, adds the physcical to virtual mapping to the page table,
+		and unmaps table and the page directory.
+		
+		a return value of 0 is success, 1 is error.
+	</p>
+	
+	<hr>
+	
+	<h2>VMM_temp_map_*</h2>
+	<p>
+		maps a physical page address to be usable in memory operations without Page-Fualting.
+		returns the virtual address to proform memory operations on.
+		Node: this shouldnt be used externally as it tempararaly swaps pages in the page table.
+	</p>
+	
+	<hr>
+	
+	<h2>VMM_temp_unmap_*</h2>
+	<p>
+		removes the temp page and puts the original page back in.
+	</p>
+	
+	<hr>
+	
+	<h2>Small helpers</h2>
+	<p>
+		<b>load_page_directory</b>: takes physical page address and loads it into register CR0.<br>
+	</p>
+	
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
