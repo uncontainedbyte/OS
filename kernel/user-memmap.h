@@ -1,0 +1,24 @@
+#pragma once
+
+
+
+#define USERSPACE_CODE     
+#define USERSPACE_RODATA   
+#define USERSPACE_DATA     
+#define USERSPACE_HEAP     
+#define USERSPACE_STACK_0  
+#define USERSPACE_STACK_1  
+#define USERSPACE_STACK_2  
+#define USERSPACE_STACK_3  
+#define USERSPACE_STACK_4  
+#define USERSPACE_STACK_5  
+#define USERSPACE_STACK_6  
+#define USERSPACE_STACK_7  
+#define USERSPACE_STACK_8  
+#define USERSPACE_STACK_9  
+#define USERSPACE_STACK_10 
+#define USERSPACE_STACK_11 
+#define USERSPACE_STACK_12 
+#define USERSPACE_STACK_13 
+#define USERSPACE_STACK_14 
+#define USERSPACE_STACK_15 
